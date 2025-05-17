@@ -1,2 +1,16 @@
-# Hacker-Tester
-Tool to test players to see if there hacking
+# Template
+
+
+This is a basic plugin template.
+
+
+## Commands
+
+| Command           | Permission                        | Description                          |
+|-------------------|-----------------------------------|--------------------------------------|
+| `/togglekbdebug`  | `knockbackcontroller.toggledebug` | Toggles knockback profile logging.   |
+
+
+## Contributors
+
+- Ikara Development
