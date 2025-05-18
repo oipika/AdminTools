@@ -1,14 +1,15 @@
-# Template
+# Admin Tools
 
 
-This is a basic plugin template.
+This is a plugin that allows staff members to do basic checks on players to see if their using any unfair advantages.
 
 
 ## Commands
 
-| Command           | Permission                        | Description                          |
-|-------------------|-----------------------------------|--------------------------------------|
-| `/togglekbdebug`  | `knockbackcontroller.toggledebug` | Toggles knockback profile logging.   |
+| Command           | Permission            | Alias                 | Description                                     |
+|-------------------|-----------------------|-----------------------|-------------------------------------------------|
+| `/velocitytest`   | `admintools.velocity` | `kbtest, vt, velo`    | Tests to see if a player will take kb.          |
+| `/nofalltest`     | `admintools.nofall`   | `nft`                 | Tests to see if a player will take fall damage. |
 
 
 ## Contributors

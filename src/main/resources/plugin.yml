@@ -5,7 +5,7 @@ commands:
   velocitytest:
     description: Test if a player has modified velocity
     usage: /<command> <player>
-    aliases: [vt]
+    aliases: [vt, kbtest, velo]
   nofalltest:
     description: Test if a player has no fall damage
     usage: /<command> <player>
