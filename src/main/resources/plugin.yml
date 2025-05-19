@@ -10,3 +10,7 @@ commands:
     description: Test if a player has no fall damage
     usage: /<command> <player>
     aliases: [nft]
+  cpstest:
+    usage: /cpstest <player> [duration]
+    description: Measure a player's clicks per second.
+    aliases: [cps, testcps]
