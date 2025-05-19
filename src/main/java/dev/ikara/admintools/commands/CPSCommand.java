@@ -19,11 +19,11 @@ public class CPSCommand implements CommandExecutor {
     private final Map<UUID, BukkitRunnable> activeTests = new HashMap<>();
 
     // weights for cheating‐detection contributions
-    private static final double W_MEAN      = 1.0;
-    private static final double W_STDDEV    = 1.0;
-    private static final double W_SKEWNESS  = 1.0;
-    private static final double W_KURTOSIS  = 1.0;
-    private static final double W_ENTROPY   = 1.0;
+    private static final double W_MEAN      = 0.0;
+    private static final double W_STDDEV    = 2.0;
+    private static final double W_SKEWNESS  = 0.5;
+    private static final double W_KURTOSIS  = 0.5;
+    private static final double W_ENTROPY   = 2.0;
     private static final double W_LQR       = 1.0;
     private static final double TOTAL_WEIGHT = W_MEAN + W_STDDEV + W_SKEWNESS + W_KURTOSIS + W_ENTROPY + W_LQR;
 
@@ -165,7 +165,7 @@ public class CPSCommand implements CommandExecutor {
                         }
 
                         TextComponent verdict = new TextComponent(color(
-                            "&fResult&7: " + (pct >= 70 ? "&cSuspicious" : "&aClean")
+                            "&fResult&7: " + (pct >= 85 ? "&cSuspicious" : "&aClean")
                             + String.format(" (%.1f%% sure)", pct)
                         ));
                         BaseComponent[] hoverComp = new ComponentBuilder(hoverText.toString()).create();

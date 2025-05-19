@@ -14,3 +14,7 @@ commands:
     usage: /cpstest <player> [duration]
     description: Measure a player's clicks per second.
     aliases: [cps, testcps]
+  killauratest:
+    usage: /killauratest <player>
+    description: Test to see if a player has Kill Aura.
+    aliases: [ka, katest, testka]

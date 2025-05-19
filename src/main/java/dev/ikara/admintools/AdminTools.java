@@ -14,6 +14,7 @@ public class AdminTools extends JavaPlugin {
         // Register commands
         getCommand("velocitytest").setExecutor(new VelocityCommand(this));
         getCommand("nofalltest").setExecutor(new NoFallCommand(this));
+        getCommand("killauratest").setExecutor(new KillAuraCommand(this));
         getCommand("cpstest").setExecutor(cpsCommand);
 
         // Register listener for click tracking
