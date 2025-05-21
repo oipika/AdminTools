@@ -1,17 +1,24 @@
 package dev.ikara.admintools.commands;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.Property;
 import dev.ikara.admintools.AdminTools;
 import net.minecraft.server.v1_8_R3.*;
 import org.bukkit.*;
-import org.bukkit.command.*;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
 import org.bukkit.craftbukkit.v1_8_R3.CraftServer;
 import org.bukkit.craftbukkit.v1_8_R3.CraftWorld;
 import org.bukkit.craftbukkit.v1_8_R3.entity.CraftPlayer;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.event.*;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.Material;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
@@ -23,20 +30,19 @@ public class KillAuraCommand implements CommandExecutor, Listener {
     private final JavaPlugin plugin;
     private final Map<UUID, TestSession> sessions = new HashMap<>();
 
-    private static final int MAX_NPC_HITS = 5;
-    private static final int MAX_GAZE_COUNT = 10;
-    private static final double MAX_REACH = 3.1;
-    private static final double GAZE_THRESHOLD = 0.95;
+    private static final int MAX_NPC_HITS = 15;
+    private static final int MAX_GAZE_COUNT = 15;
+    private static final int MAX_PLAYER_HITS = 15;
+    private static final int MAX_REACH_VIOLATIONS = 3;
+    private static final int MAX_TOTAL_SCORE = 30;
+    private static final double MAX_REACH = 3.05;
+    private static final double MAX_YAW_DIFF = 45.0;
+    private static final double MAX_PITCH_DIFF = 45.0;
+    private static final double AIM_THRESHOLD = 30.0;
 
     public KillAuraCommand(AdminTools plugin) {
         this.plugin = plugin;
         Bukkit.getPluginManager().registerEvents(this, plugin);
-    }
-
-    private boolean isLookingAt(Player p, Location loc) {
-        Vector dir = p.getEyeLocation().getDirection().normalize();
-        Vector toTarget = loc.toVector().subtract(p.getEyeLocation().toVector()).normalize();
-        return dir.dot(toTarget) > GAZE_THRESHOLD;
     }
 
     @Override
@@ -70,7 +76,10 @@ public class KillAuraCommand implements CommandExecutor, Listener {
         org.bukkit.World bWorld = target.getWorld();
         Location base = target.getLocation().add(0, 1.5, 0);
 
-        ArmorStand stand = (ArmorStand) bWorld.spawnEntity(base, org.bukkit.entity.EntityType.ARMOR_STAND);
+        // Spawn the NPC behind the player
+        Location spawnLocation = target.getLocation().add(target.getLocation().getDirection().multiply(-1).normalize().multiply(2)).add(0, 1.5, 0);
+
+        ArmorStand stand = (ArmorStand) bWorld.spawnEntity(spawnLocation, EntityType.ARMOR_STAND);
         stand.setVisible(false);
         stand.setGravity(false);
         stand.setSmall(false);
@@ -80,17 +89,24 @@ public class KillAuraCommand implements CommandExecutor, Listener {
         stand.setCustomNameVisible(false);
 
         MinecraftServer nmsServer = ((CraftServer) Bukkit.getServer()).getServer();
-        net.minecraft.server.v1_8_R3.WorldServer nmsWorld = ((CraftWorld) bWorld).getHandle();
-        GameProfile profile = new GameProfile(UUID.randomUUID(), "");
+        WorldServer nmsWorld = ((CraftWorld) bWorld).getHandle();
+
+        GameProfile originalProfile = ((CraftPlayer) target).getProfile();
+        GameProfile profile = new GameProfile(UUID.randomUUID(), " ");
+        Property texture = originalProfile.getProperties().get("textures").iterator().next();
+        profile.getProperties().put("textures", texture);
+
         EntityPlayer npc = new EntityPlayer(nmsServer, nmsWorld, profile, new PlayerInteractManager(nmsWorld));
-        npc.setLocation(base.getX(), base.getY(), base.getZ(), 0, 0);
+        npc.setLocation(spawnLocation.getX(), spawnLocation.getY(), spawnLocation.getZ(), 0, 0);
+        npc.getBukkitEntity().getInventory().setItemInHand(new ItemStack(Material.DIAMOND_SWORD));
 
         PacketPlayOutPlayerInfo addInfo = new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.ADD_PLAYER, npc);
-        PacketPlayOutNamedEntitySpawn spawn = new PacketPlayOutNamedEntitySpawn(npc);
+        PacketPlayOutNamedEntitySpawn spawnPacket = new PacketPlayOutNamedEntitySpawn(npc);
+
         for (Player p : Arrays.asList(tester, target)) {
             CraftPlayer cp = (CraftPlayer) p;
             cp.getHandle().playerConnection.sendPacket(addInfo);
-            cp.getHandle().playerConnection.sendPacket(spawn);
+            cp.getHandle().playerConnection.sendPacket(spawnPacket);
         }
 
         TestSession sess = new TestSession(tester, target, stand.getEntityId(), npc.getId());
@@ -112,119 +128,135 @@ public class KillAuraCommand implements CommandExecutor, Listener {
                     return;
                 }
 
-                double angle = Math.toRadians(ticks * 10);
-                double r = 2.5, h = Math.sin(ticks * 0.1) * 0.5;
-                Location baseLoc = target.getLocation().add(0, 1.5, 0);
-                double x = baseLoc.getX() + Math.cos(angle) * r;
-                double y = baseLoc.getY() + h;
-                double z = baseLoc.getZ() + Math.sin(angle) * r;
-                Location loc = new Location(bWorld, x, y, z);
+                // NPC Movement
+                double angle = Math.toRadians(ticks * 12); // Faster movement
+                double radius = 2.5;
+                double jumpHeight = Math.abs(Math.sin(ticks * 0.25)) * 0.75; 
 
-                stand.teleport(loc);
-                sess.bStand.teleport(loc);
-                npc.setLocation(x, y, z, 0, 0);
+                Location baseLoc = target.getLocation().add(0, 1.0, 0);
+                double x = baseLoc.getX() + Math.cos(angle) * radius;
+                double y = baseLoc.getY() + jumpHeight;
+                double z = baseLoc.getZ() + Math.sin(angle) * radius;
 
-                // NPC looks at target
-                Location npcLoc = new Location(bWorld, x, y, z);
-                Location playerLoc = target.getLocation().add(0, 1.5, 0);
-                double dx = playerLoc.getX() - npcLoc.getX();
-                double dz = playerLoc.getZ() - npcLoc.getZ();
-                float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-                npc.setLocation(x, y, z, yaw, 0);
+                Location moveLoc = new Location(bWorld, x, y, z);
 
+                // Teleport ArmorStand and NPC
+                stand.teleport(moveLoc);
+                sess.bStand.teleport(moveLoc);
+
+                Vector direction = baseLoc.clone().toVector().subtract(moveLoc.toVector());
+                float yaw = (float) Math.toDegrees(Math.atan2(-direction.getZ(), direction.getX())) - 90;
+                float pitch = (float) Math.toDegrees(-Math.atan2(direction.getY(), Math.sqrt(direction.getX() * direction.getX() + direction.getZ() * direction.getZ())));
+
+                npc.setLocation(x, y, z, yaw, pitch);
+
+                // Update NPC's position
                 PacketPlayOutEntityTeleport tp = new PacketPlayOutEntityTeleport(npc);
                 for (Player p : Arrays.asList(tester, target)) {
                     ((CraftPlayer) p).getHandle().playerConnection.sendPacket(tp);
                 }
 
-                if (isLookingAt(target, loc)) sess.gazeCount++;
+                // NPC Animation for swinging sword
+                if (ticks % 10 == 0) {
+                    PacketPlayOutAnimation swing = new PacketPlayOutAnimation(npc, 0);
+                    for (Player p : Arrays.asList(tester, target)) {
+                        ((CraftPlayer) p).getHandle().playerConnection.sendPacket(swing);
+                    }
+                }
+
+                // Aim check
+                checkAim(tester, target, sess);
             }
         }.runTaskTimer(plugin, 0L, 1L);
     }
 
+    private void checkAim(Player tester, Player target, TestSession sess) {
+        // Check if the angle between the target's view direction and the NPC's location is too small
+        Location targetEye = target.getEyeLocation();
+        Vector directionToNpc = sess.bNpc.getLocation().subtract(targetEye).toVector().normalize();
+        Vector playerViewDirection = targetEye.getDirection().normalize();
+        
+        double dotProduct = playerViewDirection.dot(directionToNpc);
+        double angle = Math.toDegrees(Math.acos(dotProduct));
+
+        if (angle < AIM_THRESHOLD) {
+            sess.gazeCount++;  // Increment gaze count if the angle is too small, indicating a potential aim assist
+        }
+    }
+
     private void endTest(Player target) {
-        TestSession sess = sessions.remove(target.getUniqueId());
+        UUID tid = target.getUniqueId();
+        TestSession sess = sessions.remove(tid);
         if (sess == null) return;
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (sess.bStand != null && !sess.bStand.isDead()) sess.bStand.remove();
-            if (sess.bNpc != null && sess.bNpc.isValid()) sess.bNpc.remove();
+        for (Player p : Arrays.asList(sess.tester, sess.target)) {
+            EntityPlayer npc = sess.nmsNpc;
+            PacketPlayOutEntityDestroy destroy = new PacketPlayOutEntityDestroy(npc.getId());
+            ((CraftPlayer) p).getHandle().playerConnection.sendPacket(destroy);
+        }
 
-            PacketPlayOutEntityDestroy destroy = new PacketPlayOutEntityDestroy(sess.fakeId);
-            PacketPlayOutPlayerInfo removeInfo = new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.REMOVE_PLAYER, sess.nmsNpc);
-            for (Player p : Arrays.asList(sess.tester, sess.target)) {
-                CraftPlayer cp = (CraftPlayer) p;
-                cp.getHandle().playerConnection.sendPacket(destroy);
-                cp.getHandle().playerConnection.sendPacket(removeInfo);
-            }
+        if (sess.bStand != null) sess.bStand.remove();
+        if (sess.bNpc != null) sess.bNpc.remove();
 
-            boolean suspicious = sess.npcHits > MAX_NPC_HITS || sess.gazeCount > MAX_GAZE_COUNT || sess.playerHits > 0 || sess.reachViolations > 0;
-            sess.tester.sendMessage(ChatColor.GOLD + "— KillAura Results for " + sess.target.getName() + " —");
-            sess.tester.sendMessage(ChatColor.GRAY + "NPC Hits:    " + sess.npcHits);
-            sess.tester.sendMessage(ChatColor.GRAY + "Gazes:       " + sess.gazeCount);
-            sess.tester.sendMessage(ChatColor.GRAY + "Player Hits: " + sess.playerHits);
-            sess.tester.sendMessage(ChatColor.GRAY + "Reach Fails: " + sess.reachViolations);
-            sess.tester.sendMessage(ChatColor.GRAY + "Total Score: " + (sess.npcHits + sess.gazeCount + sess.playerHits + sess.reachViolations));
-            sess.tester.sendMessage(suspicious ? ChatColor.RED + "Verdict: Suspicious" : ChatColor.GREEN + "Verdict: Clean");
-        });
+        int score = sess.npcHits * 2 + sess.gazeCount + sess.reachViolations * 3 - sess.playerHits * 2;
+
+        boolean suspicious = sess.npcHits > MAX_NPC_HITS ||
+                             sess.reachViolations > MAX_REACH_VIOLATIONS ||
+                             score > MAX_TOTAL_SCORE ||
+                             sess.gazeCount > 15;
+
+        // Ensure the player hits are included in the final verdict
+        sess.tester.sendMessage(ChatColor.YELLOW + "Test result for " + sess.target.getName() + ":");
+        sess.tester.sendMessage(ChatColor.GRAY + "Hits on NPC: " + sess.npcHits);
+        sess.tester.sendMessage(ChatColor.GRAY + "Gaze Count: " + sess.gazeCount);
+        sess.tester.sendMessage(ChatColor.GRAY + "Reach Violations: " + sess.reachViolations);
+        sess.tester.sendMessage(ChatColor.GRAY + "Hits on Player: " + sess.playerHits); // Player hits
+        sess.tester.sendMessage(ChatColor.GRAY + "Score: " + score + "/" + MAX_TOTAL_SCORE);
+        sess.tester.sendMessage("");
+        sess.tester.sendMessage(suspicious ? ChatColor.RED + "Verdict: Suspicious" : ChatColor.GREEN + "Verdict: Clean");
     }
 
     @EventHandler
     public void onDamage(EntityDamageByEntityEvent e) {
         if (!(e.getDamager() instanceof Player)) return;
-        Player dam = (Player) e.getDamager();
-        TestSession sess = sessions.get(dam.getUniqueId());
+        Player p = (Player) e.getDamager();
+        UUID pid = p.getUniqueId();
+        TestSession sess = sessions.get(pid);
         if (sess == null) return;
 
-        double dist = dam.getLocation().distance(e.getEntity().getLocation());
-        if (dist > MAX_REACH) sess.reachViolations++;
+        // Lag compensated reach check using multiple historical positions
+        Location pastDamagerLoc = getPastLocation(p, 2);
+        if (pastDamagerLoc == null) return;
 
-        int eid = e.getEntity().getEntityId();
-        if (eid == sess.standId) {
+        if (e.getEntity().getEntityId() == sess.npcId) {
             sess.npcHits++;
-
-            // Swing and hurt animation
-            PacketPlayOutAnimation swing = new PacketPlayOutAnimation(sess.nmsNpc, 0);
-            PacketPlayOutEntityStatus hurt = new PacketPlayOutEntityStatus(sess.nmsNpc, (byte) 2);
-
-            // NPC turns toward damager
-            Location npcLoc = sess.bNpc.getLocation();
-            Location damLoc = dam.getLocation();
-            double dx = damLoc.getX() - npcLoc.getX();
-            double dz = damLoc.getZ() - npcLoc.getZ();
-            float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
-            sess.nmsNpc.setLocation(npcLoc.getX(), npcLoc.getY(), npcLoc.getZ(), yaw, 0);
-            PacketPlayOutEntityTeleport tp = new PacketPlayOutEntityTeleport(sess.nmsNpc);
-
-            sess.bNpc.getWorld().playSound(sess.bNpc.getLocation(), Sound.HURT_FLESH, 1f, 1f);
-
-            for (Player p : Arrays.asList(sess.tester, sess.target)) {
-                PlayerConnection conn = ((CraftPlayer) p).getHandle().playerConnection;
-                conn.sendPacket(swing);
-                conn.sendPacket(hurt);
-                conn.sendPacket(tp);
-            }
-        } else if (e.getEntity() instanceof Player) {
-            sess.playerHits++;
+            double reach = pastDamagerLoc.distance(e.getEntity().getLocation());
+            if (reach > MAX_REACH) sess.reachViolations++;
+        } else if (e.getEntity() instanceof Player) {  // Target hits any player
+            sess.playerHits++;  // Increment player hit count for any player hit
         }
+    }
+
+    private Location getPastLocation(Player p, int ticksAgo) {
+        if (!p.hasMetadata("lag_comp_history")) return null;
+        List<Location> history = (List<Location>) p.getMetadata("lag_comp_history").get(0).value();
+        if (history.size() <= ticksAgo) return null;
+        return history.get(history.size() - ticksAgo - 1);
     }
 
     private static class TestSession {
         final Player tester, target;
-        final int standId, fakeId;
+        final int standId, npcId;
+        int npcHits = 0, gazeCount = 0, playerHits = 0, reachViolations = 0;
         ArmorStand bStand;
+        org.bukkit.entity.Player bNpc;
         EntityPlayer nmsNpc;
-        org.bukkit.entity.Entity bNpc;
-        int npcHits = 0;
-        int gazeCount = 0;
-        int playerHits = 0;
-        int reachViolations = 0;
 
-        TestSession(Player tester, Player target, int standId, int fakeId) {
+        TestSession(Player tester, Player target, int standId, int npcId) {
             this.tester = tester;
             this.target = target;
             this.standId = standId;
-            this.fakeId = fakeId;
+            this.npcId = npcId;
         }
     }
 }
