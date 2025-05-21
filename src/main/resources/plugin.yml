@@ -5,16 +5,20 @@ commands:
   velocitytest:
     description: Test if a player has modified velocity
     usage: /<command> <player>
-    aliases: [vt, kbtest, velo]
+    aliases: [vt, kbtest, testkb, velo]
   nofalltest:
     description: Test if a player has no fall damage
     usage: /<command> <player>
-    aliases: [nft]
+    aliases: [nft, testnofall]
   cpstest:
     usage: /cpstest <player> [duration]
     description: Measure a player's clicks per second.
-    aliases: [cps, testcps]
+    aliases: [cpst, testcps, checksps, cpscheck]
   killauratest:
     usage: /killauratest <player>
     description: Test to see if a player has Kill Aura.
-    aliases: [ka, katest, testka]
+    aliases: [kat, katest, testka]
+  fakeore:
+    usage: /fakeore <player> [material] [amount] [radius] [durationSeconds]
+    description: Test to see if a player is using X-Ray
+    aliases: [fot]
