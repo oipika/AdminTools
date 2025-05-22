@@ -21,4 +21,7 @@ commands:
   fakeore:
     usage: /fakeore <player> [material] [amount] [radius] [durationSeconds]
     description: Test to see if a player is using X-Ray
-    aliases: [fot]
+  fakebase:
+    usage: /fakebase <player> [schematic] [distance] [durationSeconds]
+    description: Test to see if a player is using X-Ray
+    aliases: [fbt]

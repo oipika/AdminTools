@@ -10,9 +10,10 @@ Tool that aims to help administrators make a far more educated guess on whether 
 |-------------------|-----------------------|-----------------------|-------------------------------------------------|
 | `/velocitytest`   | `admintools.velocity` | `kbtest, vt, velo`    | Tests to see if a player will take kb.          |
 | `/nofalltest`     | `admintools.nofall`   | `nft`                 | Tests to see if a player will take fall damage. |
-| `/cpstest`        | `admintools.cps`      | `cps, testcps`        | Tests to see if a player is auto clicking.      |
-| `/killauratest`   | `admintools.killaura` | `ka, katest, testka`  | Tests to see if a player is using Kill Aura.    |
+| `/cpstest`        | `admintools.cps`      | `cpst, cpscheck`      | Tests to see if a player is auto clicking.      |
+| `/killauratest`   | `admintools.killaura` | `kat, katest, testka` | Tests to see if a player is using Kill Aura.    |
 | `/fakeore`   		| `admintools.fakeore`  | `fot`  			    | Tests to see if a player is using X-Ray. 	      |
+| `/fakebase`  		| `admintools.fakebsse` | `fbt`  			    | Tests to see if a player is using X-Ray. 	      |
 
 
 ## Contributors

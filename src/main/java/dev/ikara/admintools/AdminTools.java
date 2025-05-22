@@ -2,11 +2,13 @@ package dev.ikara.admintools;
 
 import dev.ikara.admintools.commands.*;
 import dev.ikara.admintools.listeners.ClickListener;
+import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class AdminTools extends JavaPlugin {
 
-    private FakeOreCommand fakeOreCommand;
+    private FakeOreCommand  fakeOreCommand;
+    private FakeBaseCommand fakeBaseCommand;
 
     @Override
     public void onEnable() {
@@ -22,6 +24,9 @@ public class AdminTools extends JavaPlugin {
         fakeOreCommand = new FakeOreCommand(this);
         getCommand("fakeore").setExecutor(fakeOreCommand);
 
+        fakeBaseCommand = new FakeBaseCommand(this);
+        getCommand("fakebase").setExecutor(fakeBaseCommand);
+
         getCommand("cpstest").setExecutor(cpsCommand);
 
         // Register listener for click tracking
@@ -30,9 +35,15 @@ public class AdminTools extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Revert any outstanding fake-ore tests
+        // Unregister all event handlers belonging to this plugin
+        HandlerList.unregisterAll(this);
+
+        // Cancel any pending fake‑ore or fake‑base tests so no ghost blocks linger
         if (fakeOreCommand != null) {
             fakeOreCommand.cancelAllTests();
+        }
+        if (fakeBaseCommand != null) {
+            fakeBaseCommand.cancelAllTests();
         }
     }
 }
