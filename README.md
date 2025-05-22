@@ -1,7 +1,7 @@
 # Admin Tools
 
 
-This is a plugin that allows staff members to do basic checks on players to see if their using any unfair advantages.
+Tool that aims to help administrators make a far more educated guess on whether a player is using unfair modifcations
 
 
 ## Commands
@@ -12,6 +12,7 @@ This is a plugin that allows staff members to do basic checks on players to see 
 | `/nofalltest`     | `admintools.nofall`   | `nft`                 | Tests to see if a player will take fall damage. |
 | `/cpstest`        | `admintools.cps`      | `cps, testcps`        | Tests to see if a player is auto clicking.      |
 | `/killauratest`   | `admintools.killaura` | `ka, katest, testka`  | Tests to see if a player is using Kill Aura.    |
+| `/fakeore`   		| `admintools.fakeore`  | `fot`  			    | Tests to see if a player is using X-Ray. 	      |
 
 
 ## Contributors
