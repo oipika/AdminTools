@@ -6,30 +6,18 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
+import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.BlockIterator;
 import org.bukkit.util.Vector;
 
 import java.util.*;
 
-/**
- * /fakeore <player> [material] [amount] [radius] [durationSeconds]
- * • Default: diamond_ore, amount=5, radius=10, duration=30s
- * • Spawns each fake ore ≥5 blocks away, hidden underground
- * • Advanced LOS: casts 9 rays (yaw±10°, pitch±10°)
- * • Analyzes view‑variation & time‑to‑mine for verdict
- * Permission: admintools.fakeore
- */
 public class FakeOreCommand implements CommandExecutor, Listener {
 
     private final AdminTools plugin;
@@ -40,10 +28,13 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         Material oreType;
         int amount, radius, durationSeconds;
         long startTime;
+        int placed = 0, attempts = 0;
+        double minYaw = Double.MAX_VALUE, maxYaw = Double.MIN_VALUE;
+        double minPitch = Double.MAX_VALUE, maxPitch = Double.MIN_VALUE;
         List<Location> fakeLocations = new ArrayList<>();
         Map<Location, BlockInfo> originalBlocks = new HashMap<>();
-        List<MovementInfo> movements = new ArrayList<>();
         BukkitTask timeoutTask;
+        BukkitTask spawnTask;
     }
 
     private static class BlockInfo {
@@ -55,35 +46,18 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         }
     }
 
-    private static class MovementInfo {
-        final double yaw, pitch;
-        MovementInfo(PlayerMoveEvent e) {
-            this.yaw = e.getTo().getYaw();
-            this.pitch = e.getTo().getPitch();
-        }
-    }
-
-    private static class ViewStats {
-        final double yawRange, pitchRange;
-        ViewStats(double yawRange, double pitchRange) {
-            this.yawRange = yawRange;
-            this.pitchRange = pitchRange;
-        }
-    }
-
     public FakeOreCommand(AdminTools plugin) {
         this.plugin = plugin;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
-    /**
-     * Revert all active tests on shutdown.
-     */
+    /** Cancel and revert all active tests on plugin shutdown */
     public void cancelAllTests() {
-        for (Map.Entry<UUID, OreTestInfo> entry : testingPlayers.entrySet()) {
-            OreTestInfo info = entry.getValue();
+        for (Map.Entry<UUID, OreTestInfo> e : testingPlayers.entrySet()) {
+            OreTestInfo info = e.getValue();
             if (info.timeoutTask != null) info.timeoutTask.cancel();
-            Player suspect = Bukkit.getPlayer(entry.getKey());
+            if (info.spawnTask   != null) info.spawnTask.cancel();
+            Player suspect = Bukkit.getPlayer(e.getKey());
             if (suspect != null) revertFakeBlocks(suspect, info);
         }
         testingPlayers.clear();
@@ -113,18 +87,18 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         }
         UUID tid = target.getUniqueId();
         if (testingPlayers.containsKey(tid)) {
-            issuer.sendMessage(ChatColor.RED + "That player is already in a fake‑ore test.");
+            issuer.sendMessage(ChatColor.RED + "Already testing that player.");
             return true;
         }
 
-        // parse args with defaults
+        // parse with defaults
         Material oreType    = (args.length >= 2 ? parseMaterial(issuer, args[1]) : Material.DIAMOND_ORE);
         int amount          = (args.length >= 3 ? parseInt(issuer, args[2], 5) : 5);
         int radius          = (args.length >= 4 ? parseInt(issuer, args[3], 10) : 10);
         int durationSeconds = (args.length >= 5 ? parseInt(issuer, args[4], 30) : 30);
 
         if (oreType == null || amount < 0 || radius < 0 || durationSeconds < 0) {
-            return true;  // parse errors already messaged
+            return true; // errors already messaged
         }
 
         OreTestInfo info = new OreTestInfo();
@@ -136,9 +110,9 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         info.startTime       = System.currentTimeMillis();
         testingPlayers.put(tid, info);
 
-        spawnFakes(target, info);
+        scheduleSpawns(target, info);
 
-        // schedule automatic “clean” verdict
+        // schedule “clean” verdict
         info.timeoutTask = plugin.getServer().getScheduler().runTaskLater(
             plugin,
             () -> handleClean(tid),
@@ -146,9 +120,9 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         );
 
         issuer.sendMessage(ChatColor.YELLOW +
-            "Fake‑ore test started on " + target.getName() +
-            " → " + amount + "×" + oreType.name() +
-            " in " + radius + " blocks for " + durationSeconds + "s.");
+            "Started fake‑ore test on " + target.getName() +
+            " → " + amount + "× " + oreType.name() +
+            " in a" + radius + " block radius for " + durationSeconds + "seconds.");
         return true;
     }
 
@@ -170,72 +144,74 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         }
     }
 
-    private void spawnFakes(Player target, OreTestInfo info) {
-        Random rand = new Random();
-        Location center = target.getLocation();
-        int placed = 0, attempts = 0;
+    /** Spawns one candidate per tick, syncing chunk-load & block-change on main thread */
+    private void scheduleSpawns(Player target, OreTestInfo info) {
+        info.spawnTask = plugin.getServer().getScheduler().runTaskTimer(
+            plugin,
+            () -> {
+                if (info.placed >= info.amount || info.attempts >= info.amount * 10) {
+                    info.spawnTask.cancel();
+                    if (info.placed < info.amount) {
+                        info.issuer.sendMessage(ChatColor.RED +
+                            "Warning: placed " + info.placed + "/" + info.amount +
+                            " fake ores for " + target.getName());
+                    }
+                    return;
+                }
+                if (!target.isOnline()) {
+                    info.spawnTask.cancel();
+                    return;
+                }
 
-        while (placed < info.amount && attempts++ < info.amount * 10) {
-            double angle = rand.nextDouble() * 2 * Math.PI;
-            double r     = 5 + rand.nextDouble() * (info.radius - 5);  // ≥5 blocks away
-            Location loc = center.clone()
-                                 .add(Math.cos(angle) * r, 0, Math.sin(angle) * r)
-                                 .getBlock()
-                                 .getLocation();
-            Block block = loc.getBlock();
+                info.attempts++;
+                double angle = Math.random() * Math.PI * 2;
+                double r     = 5 + Math.random() * (info.radius - 5);
+                Location loc = target.getLocation()
+                    .clone()
+                    .add(Math.cos(angle) * r, 0, Math.sin(angle) * r)
+                    .getBlock()
+                    .getLocation();
+                Block block = loc.getBlock();
 
-            // must be solid and not used
-            if (!block.getType().isSolid() || info.originalBlocks.containsKey(loc)) {
-                continue;
-            }
-            // hidden underground: block above must be solid
-            if (!block.getRelative(0, 1, 0).getType().isSolid()) {
-                continue;
-            }
-            // advanced LOS: skip if any ray hits it
-            if (isVisible(loc, target, info.radius)) {
-                continue;
-            }
-            // ensure chunk loaded
-            loc.getWorld().loadChunk(loc.getChunk());
+                if (!block.getType().isSolid() ||
+                    info.originalBlocks.containsKey(loc) ||
+                    !block.getRelative(0,1,0).getType().isSolid() ||
+                    isVisible(loc, target, info.radius)) {
+                    return;
+                }
 
-            // store & send fake
-            info.originalBlocks.put(loc, new BlockInfo(block.getType(), block.getData()));
-            info.fakeLocations.add(loc);
-            target.sendBlockChange(loc, info.oreType, (byte) 0);
+                // synchronous chunk load
+                loc.getWorld()
+                   .loadChunk(loc.getChunk().getX(), loc.getChunk().getZ());
 
-            placed++;
-        }
+                // store & fake
+                info.originalBlocks.put(loc,
+                    new BlockInfo(block.getType(), block.getData()));
+                info.fakeLocations.add(loc);
+                target.sendBlockChange(loc, info.oreType, (byte) 0);
+
+                info.placed++;
+            },
+            1L,
+            1L
+        );
     }
 
     private boolean isVisible(Location loc, Player player, int maxDistance) {
         Location eye = player.getEyeLocation();
-        float[] yawOffsets   = {0f, 10f, -10f};
-        float[] pitchOffsets = {0f, 10f, -10f};
-
-        for (float yo : yawOffsets) {
-            for (float po : pitchOffsets) {
-                Location tempEye = eye.clone();
-                tempEye.setYaw(tempEye.getYaw() + yo);
-                tempEye.setPitch(tempEye.getPitch() + po);
-
-                Vector dir = tempEye.getDirection();
+        for (float yo : new float[]{0f,10f,-10f}) {
+            for (float po : new float[]{0f,10f,-10f}) {
+                Location e2 = eye.clone();
+                e2.setYaw(e2.getYaw() + yo);
+                e2.setPitch(e2.getPitch() + po);
+                Vector dir = e2.getDirection();
                 BlockIterator iter = new BlockIterator(
-                    tempEye.getWorld(),
-                    tempEye.toVector(),
-                    dir,
-                    0.0,
-                    maxDistance + 1
+                    e2.getWorld(), e2.toVector(), dir, 0.0, maxDistance + 1
                 );
-
                 while (iter.hasNext()) {
                     Block b = iter.next();
-                    if (b.getLocation().equals(loc)) {
-                        return true;   // visible
-                    }
-                    if (b.getType().isSolid()) {
-                        break;         // ray blocked
-                    }
+                    if (b.getLocation().equals(loc)) return true;
+                    if (b.getType().isSolid()) break;
                 }
             }
         }
@@ -246,7 +222,12 @@ public class FakeOreCommand implements CommandExecutor, Listener {
     public void onMove(PlayerMoveEvent e) {
         OreTestInfo info = testingPlayers.get(e.getPlayer().getUniqueId());
         if (info != null) {
-            info.movements.add(new MovementInfo(e));
+            double yaw   = e.getTo().getYaw();
+            double pitch = e.getTo().getPitch();
+            info.minYaw   = Math.min(info.minYaw,   yaw);
+            info.maxYaw   = Math.max(info.maxYaw,   yaw);
+            info.minPitch = Math.min(info.minPitch, pitch);
+            info.maxPitch = Math.max(info.maxPitch, pitch);
         }
     }
 
@@ -256,7 +237,6 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         UUID pid = e.getPlayer().getUniqueId();
         OreTestInfo info = testingPlayers.get(pid);
         if (info == null) return;
-
         Location clicked = e.getClickedBlock().getLocation();
         if (!info.fakeLocations.contains(clicked)) return;
 
@@ -270,6 +250,7 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         OreTestInfo info = testingPlayers.remove(pid);
         if (info == null) return;
         if (info.timeoutTask != null) info.timeoutTask.cancel();
+        if (info.spawnTask   != null) info.spawnTask.cancel();
         revertFakeBlocks(e.getPlayer(), info);
     }
 
@@ -277,73 +258,54 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         OreTestInfo info = testingPlayers.remove(pid);
         if (info == null) return;
         if (info.timeoutTask != null) info.timeoutTask.cancel();
+        if (info.spawnTask   != null) info.spawnTask.cancel();
 
+        // revert fake blocks to the suspect
         Player suspect = Bukkit.getPlayer(pid);
-        if (suspect != null) {
-            revertFakeBlocks(suspect, info);
-        }
+        if (suspect != null) revertFakeBlocks(suspect, info);
 
+        // compute stats
         double timeTaken = (System.currentTimeMillis() - info.startTime) / 1000.0;
-        ViewStats vs = analyzeViewMovements(info);
-        String name = (suspect != null ? suspect.getName() : "Unknown");
+        double dyaw   = info.maxYaw   - info.minYaw;
+        double dpitch = info.maxPitch - info.minPitch;
+        String name   = (suspect != null ? suspect.getName() : "Unknown");
 
+        // send only to issuer
         info.issuer.sendMessage(
-            ChatColor.GREEN + name + " → GUILTY (mined fake ore).\n" +
-            ChatColor.YELLOW + String.format(
-                "Time: %.2fs  |  ΔYaw: %.1f°  ΔPitch: %.1f°",
-                timeTaken, vs.yawRange, vs.pitchRange
+            ChatColor.RED + name + " → GUILTY (mined fake ore)\n" +
+            ChatColor.GRAY + String.format(
+                "Time: %.2fs | Yaw: %.1f° | Pitch: %.1f°",
+                timeTaken, dyaw, dpitch
             )
         );
-        if (suspect != null) {
-            suspect.sendMessage(
-                ChatColor.RED + "X‑ray detected! You mined fake ore after " +
-                String.format("%.2fs", timeTaken) +
-                " with minimal view change."
-            );
-        }
     }
 
     private void handleClean(UUID pid) {
         OreTestInfo info = testingPlayers.remove(pid);
         if (info == null) return;
+        if (info.spawnTask != null) info.spawnTask.cancel();
 
         Player suspect = Bukkit.getPlayer(pid);
-        if (suspect != null) {
-            revertFakeBlocks(suspect, info);
-        }
+        if (suspect != null) revertFakeBlocks(suspect, info);
 
         double duration = (System.currentTimeMillis() - info.startTime) / 1000.0;
-        ViewStats vs = analyzeViewMovements(info);
-        String name = Bukkit.getOfflinePlayer(pid).getName();
+        double dyaw   = info.maxYaw   - info.minYaw;
+        double dpitch = info.maxPitch - info.minPitch;
+        String name   = Bukkit.getOfflinePlayer(pid).getName();
 
         info.issuer.sendMessage(
-            ChatColor.GREEN + name + " → CLEAN (no fake mined).\n" +
-            ChatColor.YELLOW + String.format(
-                "Duration: %.2fs  |  ΔYaw: %.1f°  ΔPitch: %.1f°",
-                duration, vs.yawRange, vs.pitchRange
+            ChatColor.GREEN + name + " → CLEAN (no fake ore mined)\n" +
+            ChatColor.GRAY + String.format(
+                "Duration: %.2fs | Yaw: %.1f° | Pitch: %.1f°",
+                duration, dyaw, dpitch
             )
         );
     }
 
     private void revertFakeBlocks(Player player, OreTestInfo info) {
-        for (Location L : info.fakeLocations) {
-            BlockInfo O = info.originalBlocks.get(L);
-            player.sendBlockChange(L, O.type, O.data);
+        for (Location loc : info.fakeLocations) {
+            BlockInfo orig = info.originalBlocks.get(loc);
+            player.sendBlockChange(loc, orig.type, orig.data);
         }
-    }
-
-    private ViewStats analyzeViewMovements(OreTestInfo info) {
-        if (info.movements.isEmpty()) {
-            return new ViewStats(0, 0);
-        }
-        double minYaw = Double.MAX_VALUE, maxYaw = Double.MIN_VALUE;
-        double minPitch = Double.MAX_VALUE, maxPitch = Double.MIN_VALUE;
-        for (MovementInfo m : info.movements) {
-            minYaw   = Math.min(minYaw, m.yaw);
-            maxYaw   = Math.max(maxYaw, m.yaw);
-            minPitch = Math.min(minPitch, m.pitch);
-            maxPitch = Math.max(maxPitch, m.pitch);
-        }
-        return new ViewStats(maxYaw - minYaw, maxPitch - minPitch);
     }
 }
