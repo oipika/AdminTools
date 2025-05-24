@@ -6,14 +6,15 @@ Tool that aims to help administrators make a far more educated guess on whether 
 
 ## Commands
 
-| Command           | Permission            | Alias                 | Description                                     |
-|-------------------|-----------------------|-----------------------|-------------------------------------------------|
-| `/velocitytest`   | `admintools.velocity` | `kbtest, vt, velo`    | Tests to see if a player will take kb.          |
-| `/nofalltest`     | `admintools.nofall`   | `nft`                 | Tests to see if a player will take fall damage. |
-| `/cpstest`        | `admintools.cps`      | `cpst, cpscheck`      | Tests to see if a player is auto clicking.      |
-| `/killauratest`   | `admintools.killaura` | `kat, katest, testka` | Tests to see if a player is using Kill Aura.    |
-| `/fakeore`   		| `admintools.fakeore`  | `fot`  			    | Tests to see if a player is using X-Ray. 	      |
-| `/fakebase`  		| `admintools.fakebsse` | `fbt`  			    | Tests to see if a player is using X-Ray. 	      |
+| Command           | Permission             | Alias                 | Description                                     |
+|-------------------|------------------------|-----------------------|-------------------------------------------------|
+| `/velocitytest`   | `admintools.velocity`  | `kbtest, vt, velo`    | Tests to see if a player will take kb.          |
+| `/nofalltest`     | `admintools.nofall`    | `nft`                 | Tests to see if a player will take fall damage. |
+| `/cpstest`        | `admintools.cps`       | `cpst, cpscheck`      | Tests to see if a player is auto clicking.      |
+| `/killauratest`   | `admintools.killaura`  | `kat, katest, testka` | Tests to see if a player is using Kill Aura.    |
+| `/aimassist`   	| `admintools.aimassist` | `aa, aat` 			| Tests to see if a player is using Aim Assist.   |
+| `/fakeore`   		| `admintools.fakeore`   | `fot`  			    | Tests to see if a player is using X-Ray. 	      |
+| `/fakebase`  		| `admintools.fakebsse`  | `fbt`  			    | Tests to see if a player is using X-Ray. 	      |
 
 
 ## Contributors

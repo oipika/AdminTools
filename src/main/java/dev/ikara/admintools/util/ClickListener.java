@@ -1,4 +1,4 @@
-package dev.ikara.admintools.listeners;
+package dev.ikara.admintools.util;
 
 import dev.ikara.admintools.commands.CPSCommand;
 import org.bukkit.event.EventHandler;
@@ -7,7 +7,6 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.block.Action;
 
 public class ClickListener implements Listener {
-
     private final CPSCommand cpsCommand;
 
     public ClickListener(CPSCommand cpsCommand) {

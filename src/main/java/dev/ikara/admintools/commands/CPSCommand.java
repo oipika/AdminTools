@@ -1,6 +1,7 @@
 package dev.ikara.admintools.commands;
 
 import dev.ikara.admintools.AdminTools;
+import dev.ikara.admintools.util.CPSMetrics;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.ComponentBuilder;
 import net.md_5.bungee.api.chat.HoverEvent;
@@ -12,11 +13,15 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class CPSCommand implements CommandExecutor {
     private final AdminTools plugin;
-    private final Map<UUID, List<Long>> clickData = new HashMap<>();
-    private final Map<UUID, BukkitRunnable> activeTests = new HashMap<>();
+
+    // suggestion 6: use a counter instead of storing every timestamp
+    private final Map<UUID, AtomicInteger> clickData   = new ConcurrentHashMap<>();
+    private final Map<UUID, BukkitRunnable> activeTests = new ConcurrentHashMap<>();
 
     // weights for cheating‐detection contributions
     private static final double W_MEAN      = 0.0;
@@ -50,38 +55,30 @@ public class CPSCommand implements CommandExecutor {
             return true;
         }
 
-        // default: 10 seconds
         boolean isTimeTest = true;
-        int amount = 10;
+        int amount = 30; // default 30s
 
         if (args.length >= 2) {
-            String arg = args[1].trim().toLowerCase();
+            String arg = args[1].toLowerCase();
             try {
-                // check "cps" *before* generic "s"
                 if (arg.endsWith("cps")) {
-                    String numStr = arg.substring(0, arg.length() - 3);
-                    if (numStr.isEmpty()) throw new NumberFormatException();
-                    amount = Integer.parseInt(numStr);
+                    amount = Integer.parseInt(arg.substring(0, arg.length() - 3));
                     if (amount < 1 || amount > 10000) {
                         sender.sendMessage(color("&cClicks must be between 1 and 10000."));
                         return true;
                     }
                     isTimeTest = false;
-
                 } else if (arg.endsWith("s")) {
-                    String numStr = arg.substring(0, arg.length() - 1);
-                    if (numStr.isEmpty()) throw new NumberFormatException();
-                    amount = Integer.parseInt(numStr);
-                    if (amount < 1 || amount > 60) {
-                        sender.sendMessage(color("&cDuration must be between 1 and 60 seconds."));
+                    amount = Integer.parseInt(arg.substring(0, arg.length() - 1));
+                    if (amount < 1 || amount > 300) {
+                        sender.sendMessage(color("&cDuration must be between 1 and 300 seconds."));
                         return true;
                     }
                     isTimeTest = true;
-
                 } else {
                     amount = Integer.parseInt(arg);
-                    if (amount < 1 || amount > 60) {
-                        sender.sendMessage(color("&cDuration must be between 1 and 60 seconds."));
+                    if (amount < 1 || amount > 300) {
+                        sender.sendMessage(color("&cDuration must be between 1 and 300 seconds."));
                         return true;
                     }
                     isTimeTest = true;
@@ -98,53 +95,61 @@ public class CPSCommand implements CommandExecutor {
             return true;
         }
 
-        clickData.put(uuid, new ArrayList<>());
+        // initialize our counter
+        clickData.put(uuid, new AtomicInteger(0));
 
-        final Player t = target;
+        final Player t       = target;
         final CommandSender s = sender;
         final boolean timeTest = isTimeTest;
-        final int testAmount = amount;
+        final int testAmount   = amount;
 
         BukkitRunnable testTask = new BukkitRunnable() {
-            private int secondsLeft = testAmount;
+            private int secondsLeft    = testAmount;
             private int previousClicks = 0;
             private final List<Integer> cpsList = new ArrayList<>();
 
             private void sendHoverMessage(int cps) {
                 String stats = String.format(
                     "Mean: %.2f%nStdDev: %.2f%nSkewness: %.2f%nKurtosis: %.2f%nEntropy: %.2f%nLQR: %.2f",
-                    mean(cpsList), std(cpsList), skewness(cpsList),
-                    kurtosis(cpsList), entropy(cpsList), lqr(cpsList)
+                    CPSMetrics.mean(cpsList),
+                    CPSMetrics.std(cpsList),
+                    CPSMetrics.skewness(cpsList),
+                    CPSMetrics.kurtosis(cpsList),
+                    CPSMetrics.entropy(cpsList),
+                    CPSMetrics.lqr(cpsList)
                 );
-                TextComponent base = new TextComponent(color(
-                    String.format("&8[&6CPS&8] &f%s&7: &6%d CPS", t.getName(), cps)
-                ));
+
+                TextComponent base = new TextComponent(
+                  color(String.format("&8[&6CPS&8] &f%s&7: &6%d CPS", t.getName(), cps))
+                );
                 base.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                    new ComponentBuilder(stats).create()));
+                                  new ComponentBuilder(stats).create()));
+
+                // console fallback
                 if (s instanceof Player) {
                     ((Player) s).spigot().sendMessage(base);
                 } else {
-                    s.sendMessage(base.toLegacyText());
+                    s.sendMessage(TextComponent.toLegacyText(base));
                 }
             }
 
             private void finishTest() {
                 final List<Integer> snapshot = new ArrayList<>(cpsList);
-                final int finalClicks = clickData.getOrDefault(t.getUniqueId(), Collections.emptyList()).size();
+                final int finalClicks = clickData.getOrDefault(t.getUniqueId(), new AtomicInteger(0)).get();
 
                 Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                     Map<String, Double> contrib = computeContributions(snapshot);
-                    double rawTotal = contrib.values().stream().mapToDouble(Double::doubleValue).sum();
+                    double rawTotal = contrib.values().stream().mapToDouble(d -> d).sum();
                     final double pct = Math.max(0, Math.min(100, rawTotal / TOTAL_WEIGHT * 100));
 
                     StringBuilder hoverText = new StringBuilder();
-                    hoverText.append(String.format("Mean: %.2f (%.1f)%n", mean(snapshot), contrib.get("Mean")));
-                    hoverText.append(String.format("StdDev: %.2f (%.1f)%n", std(snapshot), contrib.get("StdDev")));
-                    hoverText.append(String.format("Skewness: %.2f (%.1f)%n", skewness(snapshot), contrib.get("Skewness")));
+                    hoverText.append(String.format("Mean: %.2f (%.1f)%n", CPSMetrics.mean(snapshot), contrib.get("Mean")));
+                    hoverText.append(String.format("StdDev: %.2f (%.1f)%n", CPSMetrics.std(snapshot), contrib.get("StdDev")));
+                    hoverText.append(String.format("Skewness: %.2f (%.1f)%n", CPSMetrics.skewness(snapshot), contrib.get("Skewness")));
                     hoverText.append(String.format("Kurtosis: %.2f (%.1f)%nEntropy: %.2f (%.1f)%nLQR: %.2f",
-                        kurtosis(snapshot), contrib.get("Kurtosis"),
-                        entropy(snapshot), contrib.get("Entropy"),
-                        lqr(snapshot)));
+                                      CPSMetrics.kurtosis(snapshot), contrib.get("Kurtosis"),
+                                      CPSMetrics.entropy(snapshot), contrib.get("Entropy"),
+                                      CPSMetrics.lqr(snapshot)));
 
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         s.sendMessage("");
@@ -154,13 +159,13 @@ public class CPSCommand implements CommandExecutor {
                         if (timeTest) {
                             s.sendMessage(color(String.format(
                                 "&7Average: &6%.2f CPS   &7Minimum: &6%d CPS   &7Maximum: &6%d CPS",
-                                mean(snapshot), Collections.min(snapshot), Collections.max(snapshot)
+                                CPSMetrics.mean(snapshot),
+                                Collections.min(snapshot),
+                                Collections.max(snapshot)
                             )));
                             s.sendMessage("");
                         } else {
-                            s.sendMessage(color(String.format(
-                                "&7Total Clicks: &6%d", finalClicks
-                            )));
+                            s.sendMessage(color(String.format("&7Total Clicks: &6%d", finalClicks)));
                             s.sendMessage("");
                         }
 
@@ -168,13 +173,13 @@ public class CPSCommand implements CommandExecutor {
                             "&fResult&7: " + (pct >= 85 ? "&cSuspicious" : "&aClean")
                             + String.format(" (%.1f%% sure)", pct)
                         ));
-                        BaseComponent[] hoverComp = new ComponentBuilder(hoverText.toString()).create();
-                        verdict.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hoverComp));
+                        verdict.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                                                new ComponentBuilder(hoverText.toString()).create()));
 
                         if (s instanceof Player) {
                             ((Player) s).spigot().sendMessage(verdict);
                         } else {
-                            s.sendMessage(verdict.toLegacyText());
+                            s.sendMessage(TextComponent.toLegacyText(verdict));
                         }
 
                         s.sendMessage("");
@@ -192,9 +197,8 @@ public class CPSCommand implements CommandExecutor {
                     return;
                 }
 
-                List<Long> raw = clickData.getOrDefault(t.getUniqueId(), Collections.emptyList());
-                int currClicks = raw.size();
-                int delta = currClicks - previousClicks;
+                int currClicks = clickData.get(t.getUniqueId()).get();
+                int delta      = currClicks - previousClicks;
                 previousClicks = currClicks;
 
                 cpsList.add(delta);
@@ -222,9 +226,16 @@ public class CPSCommand implements CommandExecutor {
         return true;
     }
 
+    /** Called by your external ClickListener **/
     public void recordClick(Player player) {
-        List<Long> list = clickData.get(player.getUniqueId());
-        if (list != null) list.add(System.currentTimeMillis());
+        AtomicInteger ctr = clickData.get(player.getUniqueId());
+        if (ctr != null) ctr.incrementAndGet();
+    }
+
+    public void cancelAll() {
+        activeTests.values().forEach(BukkitRunnable::cancel);
+        activeTests.clear();
+        clickData.clear();
     }
 
     private void cleanup(UUID uuid) {
@@ -236,60 +247,14 @@ public class CPSCommand implements CommandExecutor {
         return ChatColor.translateAlternateColorCodes('&', msg);
     }
 
-    private double mean(List<Integer> list) {
-        return list.stream().mapToDouble(i -> i).average().orElse(0.0);
-    }
-
-    private double std(List<Integer> list) {
-        double avg = mean(list);
-        return Math.sqrt(list.stream().mapToDouble(i -> (i - avg) * (i - avg)).average().orElse(0.0));
-    }
-
-    private double skewness(List<Integer> list) {
-        double avg = mean(list);
-        double stddev = std(list);
-        int n = list.size();
-        return stddev == 0 || n < 3 ? 0.0 : list.stream().mapToDouble(i -> Math.pow((i - avg) / stddev, 3)).sum() * n / ((n - 1.0) * (n - 2));
-    }
-
-    private double kurtosis(List<Integer> list) {
-        double avg = mean(list);
-        double stddev = std(list);
-        int n = list.size();
-        return stddev == 0 || n < 4 ? 0.0 :
-            (n * (n + 1) * list.stream().mapToDouble(i -> Math.pow((i - avg) / stddev, 4)).sum()
-            - 3 * Math.pow(n - 1, 2)) / ((n - 1.0) * (n - 2) * (n - 3));
-    }
-
-    private double entropy(List<Integer> list) {
-        Map<Integer, Integer> freq = new HashMap<>();
-        for (int val : list) freq.put(val, freq.getOrDefault(val, 0) + 1);
-        double log2 = Math.log(2);
-        double entropy = 0.0;
-        int n = list.size();
-        for (int count : freq.values()) {
-            double p = (double) count / n;
-            entropy -= p * (Math.log(p) / log2);
-        }
-        return entropy;
-    }
-
-    private double lqr(List<Integer> list) {
-        List<Integer> sorted = new ArrayList<>(list);
-        Collections.sort(sorted);
-        int q1 = sorted.get(sorted.size() / 4);
-        int q3 = sorted.get((sorted.size() * 3) / 4);
-        return q3 - q1;
-    }
-
     private Map<String, Double> computeContributions(List<Integer> cps) {
-        Map<String, Double> map = new HashMap<>();
-        map.put("Mean", mean(cps) * W_MEAN / 20.0);
-        map.put("StdDev", std(cps) * W_STDDEV / 10.0);
-        map.put("Skewness", Math.abs(skewness(cps)) * W_SKEWNESS / 2.0);
-        map.put("Kurtosis", Math.abs(kurtosis(cps) - 3.0) * W_KURTOSIS / 2.0);
-        map.put("Entropy", (2.0 - entropy(cps)) * W_ENTROPY / 2.0);
-        map.put("LQR", (30.0 - lqr(cps)) * W_LQR / 30.0);
-        return map;
+        Map<String, Double> m = new HashMap<>();
+        m.put("Mean",     CPSMetrics.mean(cps)     * W_MEAN    / 20.0);
+        m.put("StdDev",   CPSMetrics.std(cps)      * W_STDDEV  / 10.0);
+        m.put("Skewness", Math.abs(CPSMetrics.skewness(cps)) * W_SKEWNESS / 2.0);
+        m.put("Kurtosis", Math.abs(CPSMetrics.kurtosis(cps) - 3.0) * W_KURTOSIS / 2.0);
+        m.put("Entropy",  (2.0 - CPSMetrics.entropy(cps)) * W_ENTROPY / 2.0);
+        m.put("LQR",      (30.0 - CPSMetrics.lqr(cps)) * W_LQR / 30.0);
+        return m;
     }
 }

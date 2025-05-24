@@ -1,49 +1,63 @@
 package dev.ikara.admintools;
 
 import dev.ikara.admintools.commands.*;
-import dev.ikara.admintools.listeners.ClickListener;
+import dev.ikara.admintools.util.ClickListener;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class AdminTools extends JavaPlugin {
-
+    // Command instances that need cleanup
+    private CPSCommand      cpsCommand;
     private FakeOreCommand  fakeOreCommand;
     private FakeBaseCommand fakeBaseCommand;
 
     @Override
     public void onEnable() {
-        // Shared instance for CPSCommand
-        CPSCommand cpsCommand = new CPSCommand(this);
-
-        // Register commands
-        getCommand("velocitytest").setExecutor(new VelocityCommand(this));
-        getCommand("nofalltest").setExecutor(new NoFallCommand(this));
-        getCommand("killauratest").setExecutor(new KillAuraCommand(this));
-
-        // keep a reference so we can clean up on disable
-        fakeOreCommand = new FakeOreCommand(this);
-        getCommand("fakeore").setExecutor(fakeOreCommand);
-
+        // Initialize command instances
+        cpsCommand      = new CPSCommand(this);
+        fakeOreCommand  = new FakeOreCommand(this);
         fakeBaseCommand = new FakeBaseCommand(this);
-        getCommand("fakebase").setExecutor(fakeBaseCommand);
 
-        getCommand("cpstest").setExecutor(cpsCommand);
+        // Register all commands
+        registerCommand("velocitytest",   new VelocityCommand(this));
+        registerCommand("nofalltest",     new NoFallCommand(this));
+        registerCommand("killauratest",   new KillAuraCommand(this));
+        registerCommand("aimanalysis",    new AimAnalysisCommand(this));
+        registerCommand("fakeore",        fakeOreCommand);
+        registerCommand("fakebase",       fakeBaseCommand);
+        registerCommand("cpstest",        cpsCommand);
 
-        // Register listener for click tracking
+        // Register the click listener for CPS
         getServer().getPluginManager().registerEvents(new ClickListener(cpsCommand), this);
     }
 
     @Override
     public void onDisable() {
-        // Unregister all event handlers belonging to this plugin
+        // Unregister every listener to avoid ghost handlers
         HandlerList.unregisterAll(this);
 
-        // Cancel any pending fake‑ore or fake‑base tests so no ghost blocks linger
+        // Cancel any in‑progress CPS tests
+        if (cpsCommand != null) {
+            cpsCommand.cancelAll();
+        }
+
+        // Cancel any fake‑ore or fake‑base tasks so no ghost blocks linger
         if (fakeOreCommand != null) {
             fakeOreCommand.cancelAllTests();
         }
         if (fakeBaseCommand != null) {
             fakeBaseCommand.cancelAllTests();
+        }
+    }
+
+    /**
+     * Helper to reduce boilerplate when registering commands.
+     */
+    private void registerCommand(String name, org.bukkit.command.CommandExecutor executor) {
+        if (getCommand(name) != null) {
+            getCommand(name).setExecutor(executor);
+        } else {
+            getLogger().warning("Command '/" + name + "' is not defined in plugin.yml");
         }
     }
 }
