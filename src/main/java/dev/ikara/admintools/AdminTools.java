@@ -1,7 +1,6 @@
 package dev.ikara.admintools;
 
 import dev.ikara.admintools.commands.*;
-import dev.ikara.admintools.util.ClickListener;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -19,16 +18,13 @@ public class AdminTools extends JavaPlugin {
         fakeBaseCommand = new FakeBaseCommand(this);
 
         // Register all commands
-        registerCommand("velocitytest",   new VelocityCommand(this));
-        registerCommand("nofalltest",     new NoFallCommand(this));
-        registerCommand("killauratest",   new KillAuraCommand(this));
-        registerCommand("aimanalysis",    new AimAnalysisCommand(this));
-        registerCommand("fakeore",        fakeOreCommand);
-        registerCommand("fakebase",       fakeBaseCommand);
-        registerCommand("cpstest",        cpsCommand);
-
-        // Register the click listener for CPS
-        getServer().getPluginManager().registerEvents(new ClickListener(cpsCommand), this);
+        registerCommand("velocitytest", new VelocityCommand(this));
+        registerCommand("nofalltest",   new NoFallCommand(this));
+        registerCommand("killauratest", new KillAuraCommand(this));
+        registerCommand("aimanalysis",  new AimAnalysisCommand(this));
+        registerCommand("fakeore",      fakeOreCommand);
+        registerCommand("fakebase",     fakeBaseCommand);
+        registerCommand("cpstest",      cpsCommand);
     }
 
     @Override

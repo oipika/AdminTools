@@ -1,36 +1,30 @@
 package dev.ikara.admintools.commands;
 
 import dev.ikara.admintools.AdminTools;
-import dev.ikara.admintools.util.CPSMetrics;
-import net.md_5.bungee.api.chat.BaseComponent;
-import net.md_5.bungee.api.chat.ComponentBuilder;
-import net.md_5.bungee.api.chat.HoverEvent;
-import net.md_5.bungee.api.chat.TextComponent;
+import dev.ikara.admintools.util.PacketCPS;
+import dev.ikara.admintools.util.PacketInterceptor;
+import dev.ikara.checks.autoclicker.BurstCPS;
+import dev.ikara.checks.autoclicker.EntropyCPS;
+import dev.ikara.checks.autoclicker.MetricsCPS;
+import dev.ikara.checks.autoclicker.VarianceCPS;
+import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelHandlerContext;
+import net.minecraft.server.v1_8_R3.PacketPlayInArmAnimation;
+import net.minecraft.server.v1_8_R3.PacketPlayInUseEntity;
+import net.minecraft.server.v1_8_R3.PacketPlayInUseEntity.EnumEntityUseAction;
+import net.md_5.bungee.api.chat.*;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.*;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class CPSCommand implements CommandExecutor {
     private final AdminTools plugin;
-
-    // suggestion 6: use a counter instead of storing every timestamp
-    private final Map<UUID, AtomicInteger> clickData   = new ConcurrentHashMap<>();
-    private final Map<UUID, BukkitRunnable> activeTests = new ConcurrentHashMap<>();
-
-    // weights for cheating‐detection contributions
-    private static final double W_MEAN      = 0.0;
-    private static final double W_STDDEV    = 2.0;
-    private static final double W_SKEWNESS  = 0.5;
-    private static final double W_KURTOSIS  = 0.5;
-    private static final double W_ENTROPY   = 2.0;
-    private static final double W_LQR       = 1.0;
-    private static final double TOTAL_WEIGHT = W_MEAN + W_STDDEV + W_SKEWNESS + W_KURTOSIS + W_ENTROPY + W_LQR;
+    private final Map<UUID, TestSession> sessions = new HashMap<>();
+    private final int feedbackInterval = 5; // seconds
 
     public CPSCommand(AdminTools plugin) {
         this.plugin = plugin;
@@ -39,13 +33,11 @@ public class CPSCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (!sender.hasPermission("admintools.cps")) {
-            sender.sendMessage(color("&cYou do not have permission to use this command."));
+            sender.sendMessage(color("&cYou do not have permission."));
             return true;
         }
-
         if (args.length < 1) {
-            sender.sendMessage(color("&cUsage: /cpstest <player> [amount][s|cps]"));
-            sender.sendMessage(color("&cExample: /cpstest oipika 10s (10 seconds) or /cpstest oipika 100cps (100 clicks)"));
+            sender.sendMessage(color("&cUsage: /cpstest <player> [check] [#s|#cps]"));
             return true;
         }
 
@@ -55,206 +47,212 @@ public class CPSCommand implements CommandExecutor {
             return true;
         }
 
-        boolean isTimeTest = true;
-        int amount = 30; // default 30s
-
-        if (args.length >= 2) {
-            String arg = args[1].toLowerCase();
-            try {
-                if (arg.endsWith("cps")) {
-                    amount = Integer.parseInt(arg.substring(0, arg.length() - 3));
-                    if (amount < 1 || amount > 10000) {
-                        sender.sendMessage(color("&cClicks must be between 1 and 10000."));
-                        return true;
-                    }
-                    isTimeTest = false;
-                } else if (arg.endsWith("s")) {
-                    amount = Integer.parseInt(arg.substring(0, arg.length() - 1));
-                    if (amount < 1 || amount > 300) {
-                        sender.sendMessage(color("&cDuration must be between 1 and 300 seconds."));
-                        return true;
-                    }
-                    isTimeTest = true;
-                } else {
-                    amount = Integer.parseInt(arg);
-                    if (amount < 1 || amount > 300) {
-                        sender.sendMessage(color("&cDuration must be between 1 and 300 seconds."));
-                        return true;
-                    }
-                    isTimeTest = true;
-                }
-            } catch (NumberFormatException ex) {
-                sender.sendMessage(color("&cInvalid value. Must be a number followed by 's' or 'cps'."));
-                return true;
+        String checkName = "metrics";
+        boolean timeTest = true;
+        int amount = 30;
+        if (args.length >= 2 && !args[1].matches("\\d+.*")) {
+            checkName = args[1].toLowerCase();
+        }
+        String numArg = (args.length >= 2 && args[1].matches("\\d+.*")) ? args[1]
+                : (args.length >= 3 ? args[2] : null);
+        if (numArg != null) {
+            numArg = numArg.toLowerCase();
+            if (numArg.endsWith("cps")) {
+                amount = Integer.parseInt(numArg.replaceAll("[^0-9]", ""));
+                timeTest = false;
+            } else {
+                amount = Integer.parseInt(numArg.replaceAll("[^0-9]", ""));
+                timeTest = true;
             }
+        }
+
+        PacketCPS check;
+        switch (checkName) {
+            case "variance": check = new VarianceCPS(); break;
+            case "entropy":  check = new EntropyCPS();  break;
+            case "burst":    check = new BurstCPS();    break;
+            case "metrics":
+            default:         check = new MetricsCPS();  break;
         }
 
         UUID uuid = target.getUniqueId();
-        if (activeTests.containsKey(uuid)) {
-            sender.sendMessage(color("&cThat player is already being tested."));
+        if (sessions.containsKey(uuid)) {
+            sender.sendMessage(color("&cThat player is already in a test."));
             return true;
         }
 
-        // initialize our counter
-        clickData.put(uuid, new AtomicInteger(0));
+        TestSession session = new TestSession(target, sender, check, timeTest, amount);
+        sessions.put(uuid, session);
+        session.start();
 
-        final Player t       = target;
-        final CommandSender s = sender;
-        final boolean timeTest = isTimeTest;
-        final int testAmount   = amount;
-
-        BukkitRunnable testTask = new BukkitRunnable() {
-            private int secondsLeft    = testAmount;
-            private int previousClicks = 0;
-            private final List<Integer> cpsList = new ArrayList<>();
-
-            private void sendHoverMessage(int cps) {
-                String stats = String.format(
-                    "Mean: %.2f%nStdDev: %.2f%nSkewness: %.2f%nKurtosis: %.2f%nEntropy: %.2f%nLQR: %.2f",
-                    CPSMetrics.mean(cpsList),
-                    CPSMetrics.std(cpsList),
-                    CPSMetrics.skewness(cpsList),
-                    CPSMetrics.kurtosis(cpsList),
-                    CPSMetrics.entropy(cpsList),
-                    CPSMetrics.lqr(cpsList)
-                );
-
-                TextComponent base = new TextComponent(
-                  color(String.format("&8[&6CPS&8] &f%s&7: &6%d CPS", t.getName(), cps))
-                );
-                base.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                  new ComponentBuilder(stats).create()));
-
-                // console fallback
-                if (s instanceof Player) {
-                    ((Player) s).spigot().sendMessage(base);
-                } else {
-                    s.sendMessage(TextComponent.toLegacyText(base));
-                }
-            }
-
-            private void finishTest() {
-                final List<Integer> snapshot = new ArrayList<>(cpsList);
-                final int finalClicks = clickData.getOrDefault(t.getUniqueId(), new AtomicInteger(0)).get();
-
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                    Map<String, Double> contrib = computeContributions(snapshot);
-                    double rawTotal = contrib.values().stream().mapToDouble(d -> d).sum();
-                    final double pct = Math.max(0, Math.min(100, rawTotal / TOTAL_WEIGHT * 100));
-
-                    StringBuilder hoverText = new StringBuilder();
-                    hoverText.append(String.format("Mean: %.2f (%.1f)%n", CPSMetrics.mean(snapshot), contrib.get("Mean")));
-                    hoverText.append(String.format("StdDev: %.2f (%.1f)%n", CPSMetrics.std(snapshot), contrib.get("StdDev")));
-                    hoverText.append(String.format("Skewness: %.2f (%.1f)%n", CPSMetrics.skewness(snapshot), contrib.get("Skewness")));
-                    hoverText.append(String.format("Kurtosis: %.2f (%.1f)%nEntropy: %.2f (%.1f)%nLQR: %.2f",
-                                      CPSMetrics.kurtosis(snapshot), contrib.get("Kurtosis"),
-                                      CPSMetrics.entropy(snapshot), contrib.get("Entropy"),
-                                      CPSMetrics.lqr(snapshot)));
-
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        s.sendMessage("");
-                        s.sendMessage(color("&a&lCPS TEST FINISHED &7– &f" + t.getName() + " &7[" + finalClicks + " clicks]"));
-                        s.sendMessage("");
-
-                        if (timeTest) {
-                            s.sendMessage(color(String.format(
-                                "&7Average: &6%.2f CPS   &7Minimum: &6%d CPS   &7Maximum: &6%d CPS",
-                                CPSMetrics.mean(snapshot),
-                                Collections.min(snapshot),
-                                Collections.max(snapshot)
-                            )));
-                            s.sendMessage("");
-                        } else {
-                            s.sendMessage(color(String.format("&7Total Clicks: &6%d", finalClicks)));
-                            s.sendMessage("");
-                        }
-
-                        TextComponent verdict = new TextComponent(color(
-                            "&fResult&7: " + (pct >= 85 ? "&cSuspicious" : "&aClean")
-                            + String.format(" (%.1f%% sure)", pct)
-                        ));
-                        verdict.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                                new ComponentBuilder(hoverText.toString()).create()));
-
-                        if (s instanceof Player) {
-                            ((Player) s).spigot().sendMessage(verdict);
-                        } else {
-                            s.sendMessage(TextComponent.toLegacyText(verdict));
-                        }
-
-                        s.sendMessage("");
-                        cleanup(t.getUniqueId());
-                    });
-                });
-            }
-
-            @Override
-            public void run() {
-                if (!t.isOnline()) {
-                    s.sendMessage(color("&cThe player went offline."));
-                    cleanup(t.getUniqueId());
-                    cancel();
-                    return;
-                }
-
-                int currClicks = clickData.get(t.getUniqueId()).get();
-                int delta      = currClicks - previousClicks;
-                previousClicks = currClicks;
-
-                cpsList.add(delta);
-                sendHoverMessage(delta);
-
-                if (timeTest) {
-                    if (--secondsLeft <= 0) {
-                        finishTest();
-                        cancel();
-                    }
-                } else {
-                    if (currClicks >= testAmount) {
-                        finishTest();
-                        cancel();
-                    }
-                }
-            }
-        };
-
-        activeTests.put(uuid, testTask);
-        testTask.runTaskTimer(plugin, 20L, 20L);
-
-        String typeStr = isTimeTest ? (amount + " seconds") : (amount + " clicks");
-        sender.sendMessage(color("&aStarted CPS test on &6" + target.getName() + " &afor &6" + typeStr + "&a."));
+        sender.sendMessage(color(
+            "&aStarted CPS test on &6" + target.getName() +
+            " &afor &6" + amount + (timeTest ? " seconds" : " clicks") +
+            " &7[check: " + check.name() + "]"
+        ));
         return true;
     }
 
-    /** Called by your external ClickListener **/
-    public void recordClick(Player player) {
-        AtomicInteger ctr = clickData.get(player.getUniqueId());
-        if (ctr != null) ctr.incrementAndGet();
-    }
-
     public void cancelAll() {
-        activeTests.values().forEach(BukkitRunnable::cancel);
-        activeTests.clear();
-        clickData.clear();
-    }
-
-    private void cleanup(UUID uuid) {
-        activeTests.remove(uuid);
-        clickData.remove(uuid);
+        for (TestSession ts : sessions.values()) ts.terminate();
+        sessions.clear();
     }
 
     private String color(String msg) {
         return ChatColor.translateAlternateColorCodes('&', msg);
     }
 
-    private Map<String, Double> computeContributions(List<Integer> cps) {
-        Map<String, Double> m = new HashMap<>();
-        m.put("Mean",     CPSMetrics.mean(cps)     * W_MEAN    / 20.0);
-        m.put("StdDev",   CPSMetrics.std(cps)      * W_STDDEV  / 10.0);
-        m.put("Skewness", Math.abs(CPSMetrics.skewness(cps)) * W_SKEWNESS / 2.0);
-        m.put("Kurtosis", Math.abs(CPSMetrics.kurtosis(cps) - 3.0) * W_KURTOSIS / 2.0);
-        m.put("Entropy",  (2.0 - CPSMetrics.entropy(cps)) * W_ENTROPY / 2.0);
-        m.put("LQR",      (30.0 - CPSMetrics.lqr(cps)) * W_LQR / 30.0);
-        return m;
+    private class TestSession {
+        final Player player;
+        final CommandSender sender;
+        final PacketCPS check;
+        final boolean timeTest;
+        final int amount;
+        final String handlerName;
+        final ChannelDuplexHandler handler;
+
+        BukkitTask perSecondTask, feedbackTask, endTask;
+        final List<Integer> global = new ArrayList<>();
+        final Deque<Integer> window = new ArrayDeque<>();
+        int prevClicks = 0;
+
+        TestSession(Player player, CommandSender sender, PacketCPS check, boolean timeTest, int amount) {
+            this.player = player;
+            this.sender = sender;
+            this.check = check;
+            this.timeTest = timeTest;
+            this.amount = amount;
+            this.handlerName = "cps_" + player.getUniqueId().toString().substring(0,5) + "_" + check.name();
+
+            this.handler = new ChannelDuplexHandler() {
+                @Override
+                public void channelRead(ChannelHandlerContext ctx, Object pkt) throws Exception {
+                    boolean clicked = false;
+                    if (pkt instanceof PacketPlayInUseEntity) {
+                        PacketPlayInUseEntity p = (PacketPlayInUseEntity)pkt;
+                        if (p.a() == EnumEntityUseAction.ATTACK) clicked = true;
+                    } else if (pkt instanceof PacketPlayInArmAnimation) {
+                        clicked = true;
+                    }
+                    if (clicked) {
+                        check.recordClick(System.nanoTime());
+                        if (!timeTest && check.totalClicks() >= amount) {
+                            new BukkitRunnable() {
+                                @Override public void run() { finish(); }
+                            }.runTask(plugin);
+                        }
+                    }
+                    super.channelRead(ctx, pkt);
+                }
+            };
+        }
+
+        void start() {
+            PacketInterceptor.inject(player, handler, handlerName);
+
+            perSecondTask = new BukkitRunnable() {
+                @Override
+                public void run() {
+                    int total = check.totalClicks();
+                    int delta = total - prevClicks;
+                    prevClicks = total;
+                    global.add(delta);
+                    window.addLast(delta);
+                    if (window.size() > feedbackInterval) window.removeFirst();
+                }
+            }.runTaskTimer(plugin, 20L, 20L);
+
+            feedbackTask = new BukkitRunnable() {
+                @Override
+                public void run() {
+                    List<Integer> snap = new ArrayList<>(window);
+                    String headerHover = check.hoverText();
+
+                    TextComponent header = new TextComponent(color(
+                        String.format("&8[&6CPS&8] &f%s's Last %d Seconds",
+                                      player.getName(), feedbackInterval)
+                    ));
+                    header.setHoverEvent(new HoverEvent(
+                        HoverEvent.Action.SHOW_TEXT,
+                        new ComponentBuilder(headerHover).create()
+                    ));
+                    if (sender instanceof Player) {
+                        ((Player)sender).spigot().sendMessage(header);
+                    } else {
+                        sender.sendMessage(header.toLegacyText());
+                    }
+
+                    // each bullet now uses check.hoverText() AND reflects cumulative progress
+                    for (int i = 0; i < snap.size(); i++) {
+                        int cpsVal = snap.get(i);
+                        TextComponent line = new TextComponent(
+                            color("  * &6" + cpsVal + " CPS")
+                        );
+                        // check.hoverText() accumulates all clicks so far in this test
+                        line.setHoverEvent(new HoverEvent(
+                            HoverEvent.Action.SHOW_TEXT,
+                            new ComponentBuilder(check.hoverText()).create()
+                        ));
+                        if (sender instanceof Player) {
+                            ((Player)sender).spigot().sendMessage(line);
+                        } else {
+                            sender.sendMessage(line.toLegacyText());
+                        }
+                    }
+                }
+            }.runTaskTimer(plugin, feedbackInterval * 20L, feedbackInterval * 20L);
+
+            if (timeTest) {
+                endTask = new BukkitRunnable() {
+                    @Override public void run() { finish(); }
+                }.runTaskLater(plugin, amount * 20L);
+            }
+        }
+
+        void finish() {
+            if (perSecondTask != null) perSecondTask.cancel();
+            if (feedbackTask   != null) feedbackTask.cancel();
+            PacketInterceptor.remove(player, handlerName);
+            sessions.remove(player.getUniqueId());
+
+            double avg = global.stream().mapToDouble(i->i).average().orElse(0.0);
+            int min = global.stream().mapToInt(i->i).min().orElse(0);
+            int max = global.stream().mapToInt(i->i).max().orElse(0);
+
+            sender.sendMessage("");
+            sender.sendMessage(color(String.format(
+                "&a&lCPS TEST FINISHED &7– &f%s &7[%d clicks]",
+                player.getName(), check.totalClicks()
+            )));
+            sender.sendMessage("");
+            sender.sendMessage(color(String.format(
+                "&7Average: &6%.2f CPS   &7Minimum: &6%d CPS   &7Maximum: &6%d CPS",
+                avg, min, max
+            )));
+            sender.sendMessage("");
+
+            double pct = check.finish();
+            TextComponent verdict = new TextComponent(color(
+                "&fResult&7: " +
+                (pct >= 85 ? "&cSuspicious" : "&aClean") +
+                String.format(" (%.1f%% sure)", pct)
+            ));
+            verdict.setHoverEvent(new HoverEvent(
+                HoverEvent.Action.SHOW_TEXT,
+                new ComponentBuilder(check.hoverText()).create()
+            ));
+            if (sender instanceof Player) {
+                ((Player)sender).spigot().sendMessage(verdict);
+            } else {
+                sender.sendMessage(verdict.toLegacyText());
+            }
+            sender.sendMessage("");
+        }
+
+        void terminate() {
+            if (perSecondTask != null) perSecondTask.cancel();
+            if (feedbackTask   != null) feedbackTask.cancel();
+            PacketInterceptor.remove(player, handlerName);
+        }
     }
 }
