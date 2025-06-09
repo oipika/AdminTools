@@ -1,0 +1,48 @@
+# Thresholds & settings for each check. Adjust as needed.
+
+
+# Aim Analysis Settings
+aimanalysis:
+  default-duration: 60 # seconds
+  base-max-yaw-threshold: 20.0 # degrees per tick
+  base-min-stddev: 0.5 # minimum standard deviation
+  outlier-percent: 0.05 # fraction trimmed from each end
+
+
+# CPS Settings
+cps:
+  # how many seconds to run the test by default
+  default-duration: 30
+  # feedback interval for when it sends the targets 5 seconds of their recorded cps.
+  feedback-interval: 5
+
+  # Per-check thresholds and weights
+  burst:
+    dt-threshold-millis: 25 # max interval in ms considered 'perfect burst'
+    ratio-scale: 2.0 # scaling factor for finish() ratio
+
+  entropy:
+    min-samples: 5 # minimum clicks to compute entropy
+
+  variance:
+    min-samples: 5 # minimum intervals to compute variance
+    cv-multiplier: 5.0 # multiplier applied to coefficient of variation
+
+  metrics:
+    w-mean: 0.0 # Detects overall average click speed (scale 0–20)
+    w-stddev: 2.0 # Measures consistency of click intervals (scale 0–10)
+    w-skewness: 0.5 # Identifies asymmetry in click patterns (e.g., acceleration) (scale 0–2)
+    w-kurtosis: 0.5 # Highlights heavy tails/outliers in click distribution (scale 0–2)
+    w-entropy: 2.0 # Gauges randomness/unpredictability of clicks (scale 0–2)
+    w-lqr: 1.0 # (Longest Quiet Ratio) – Effective at spotting double-clicks or irregular bursts (scale 0–30)
+
+
+# Example placeholders for your other checks:
+killauratest:
+  max-attack-angle: 45.0
+
+nofalltest:
+  fall-distance-threshold: 3.0
+
+velocitytest:
+  max-movement-delta: 1.0

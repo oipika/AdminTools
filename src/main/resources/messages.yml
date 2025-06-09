@@ -1,0 +1,43 @@
+# AdminTools Messages
+
+# General
+only-players:         "&cOnly players can run this."
+no-permission:        "&cYou lack permission: %s"
+verdict-clean:        "&aClean"
+verdict-suspicious:   "&cSuspicious"
+
+
+# AimAnalysisCommand
+usage-aimanalysis:    "&7Usage: &e/aimanalysis <player> [duration]"
+player-not-found:     "&cPlayer not found or offline."
+already-running:      "&cAnalysis already running for %s"
+start-analysis:       "&aStarting aim analysis on %s for %d seconds"
+invalid-duration:     "&eInvalid duration; defaulting to %d seconds"
+not-enough-data:      "&cNot enough data to analyze."
+
+results-title:        "&6Aim Analysis Results for %s"
+results-ping:         "&7Avg Ping: %.1f ms"
+results-mean:         "&7Mean Yaw Δ: %.3f° | Mean Pitch Δ: %.3f°"
+results-std:          "&7StdDev Yaw: %.3f° | StdDev Pitch: %.3f°"
+
+
+# CPSCommand
+cps-no-permission:    "&cYou do not have permission."
+cps-usage:            "&7Usage: &e/cpstest <player> [check] [#s|#cps]"
+cps-player-not-found: "&cPlayer %s is not online."
+cps-already-running:  "&cThat player %s is already in a test."
+
+cps-started:          "&aStarted CPS test on &6%s &afor &6%d %s &7[check: %s]"
+cps-feedback-header:  "&8[&6CPS&8] &f%s's Last %d Seconds"
+cps-feedback-line:    "  * &6%d CPS"
+
+cps-finish-title:     "\n&a&lCPS TEST FINISHED &7– &f%s &7[%d clicks]\n"
+cps-finish-stats:     "&7Average: &6%.2f CPS   &7Minimum: &6%d CPS   &7Maximum: &6%d CPS\n"
+cps-finish-verdict:   "&fResult&7: %s (%.1f%% sure)\n"
+
+
+# Pagination (generic)
+pagination-header:    "&7--- Page %d of %d ---"
+pagination-item:      "&f%s"
+pagination-prev:      "&c[Previous]"
+pagination-next:      "&a[Next]"

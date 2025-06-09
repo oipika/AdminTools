@@ -1,6 +1,6 @@
 name: AdminTools
 main: dev.ikara.admintools.AdminTools
-version: 1.0
+version: 1.2
 commands:
   velocitytest:
     description: Test if a player has modified velocity

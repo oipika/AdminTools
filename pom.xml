@@ -7,7 +7,7 @@
 
     <groupId>dev.ikara.admintools</groupId>
     <artifactId>AdminTools</artifactId>
-    <version>1.0</version>
+    <version>1.2</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
