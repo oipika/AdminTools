@@ -24,18 +24,18 @@ public class AimAnalysisCommand implements CommandExecutor, Listener, TabComplet
     private final AdminTools plugin;
     private final Map<UUID, AimSession> sessions = new HashMap<>();
 
-    private final int    defaultDuration;
-    private final float  maxYawThreshold;
-    private final float  minStddev;
+    private final int defaultDuration;
+    private final float maxYawThreshold;
+    private final float minStddev;
     private final double outlierPercent;
 
     public AimAnalysisCommand(AdminTools plugin) {
         this.plugin = plugin;
         FileConfiguration cfg = plugin.getConfig();
-        defaultDuration   = cfg.getInt("aimanalysis.default-duration", 60);
-        maxYawThreshold   = (float)cfg.getDouble("aimanalysis.base-max-yaw-threshold", 20.0);
-        minStddev         = (float)cfg.getDouble("aimanalysis.base-min-stddev", 0.5);
-        outlierPercent    = cfg.getDouble("aimanalysis.outlier-percent", 0.05);
+        defaultDuration = cfg.getInt("aimanalysis.default-duration", 60);
+        maxYawThreshold = (float)cfg.getDouble("aimanalysis.base-max-yaw-threshold", 20.0);
+        minStddev = (float)cfg.getDouble("aimanalysis.base-min-stddev", 0.5);
+        outlierPercent = cfg.getDouble("aimanalysis.outlier-percent", 0.05);
 
         plugin.getCommand("aimanalysis").setExecutor(this);
         plugin.getCommand("aimanalysis").setTabCompleter(this);
@@ -104,7 +104,7 @@ public class AimAnalysisCommand implements CommandExecutor, Listener, TabComplet
         AimSession sess = sessions.get(ev.getPlayer().getUniqueId());
         if (sess == null) return;
         EntityPlayer ep = ((CraftPlayer)ev.getPlayer()).getHandle();
-        float yaw   = ev.getTo().getYaw();
+        float yaw = ev.getTo().getYaw();
         float pitch = ev.getTo().getPitch();
         if (sess.initialized) {
             sess.yawDeltas.add(Math.abs(yaw - sess.lastYaw));
@@ -113,7 +113,7 @@ public class AimAnalysisCommand implements CommandExecutor, Listener, TabComplet
         } else {
             sess.initialized = true;
         }
-        sess.lastYaw   = yaw;
+        sess.lastYaw = yaw;
         sess.lastPitch = pitch;
     }
 
@@ -127,13 +127,13 @@ public class AimAnalysisCommand implements CommandExecutor, Listener, TabComplet
         double avgPing = sess.pingSamples.stream().mapToInt(i->i).average().orElse(0);
         float adjThresh = (float)(maxYawThreshold * (1 + avgPing/200.0));
 
-        List<Float> fYaw   = filter(sess.yawDeltas);
+        List<Float> fYaw = filter(sess.yawDeltas);
         List<Float> fPitch = filter(sess.pitchDeltas);
 
-        double meanYaw   = fYaw.stream().mapToDouble(d->d).average().orElse(0);
+        double meanYaw = fYaw.stream().mapToDouble(d->d).average().orElse(0);
         double meanPitch = fPitch.stream().mapToDouble(d->d).average().orElse(0);
 
-        double stdYaw   = Math.sqrt(fYaw.stream().mapToDouble(d->Math.pow(d-meanYaw,2)).sum()/fYaw.size());
+        double stdYaw = Math.sqrt(fYaw.stream().mapToDouble(d->Math.pow(d-meanYaw,2)).sum()/fYaw.size());
         double stdPitch = Math.sqrt(fPitch.stream().mapToDouble(d->Math.pow(d-meanPitch,2)).sum()/fPitch.size());
 
         MessageHandler.sendInfoFmt(sess.tester, "results-title", target.getName());
@@ -169,9 +169,9 @@ public class AimAnalysisCommand implements CommandExecutor, Listener, TabComplet
 
     private static class AimSession {
         final Player tester, target;
-        final List<Float>   yawDeltas   = new ArrayList<>();
-        final List<Float>   pitchDeltas = new ArrayList<>();
-        final List<Integer> pingSamples  = new ArrayList<>();
+        final List<Float> yawDeltas = new ArrayList<>();
+        final List<Float> pitchDeltas = new ArrayList<>();
+        final List<Integer> pingSamples = new ArrayList<>();
         boolean initialized = false;
         float lastYaw, lastPitch;
         AimSession(Player tester, Player target) {

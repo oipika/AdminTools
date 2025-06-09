@@ -1,43 +1,78 @@
 # AdminTools Messages
 
 # General
-only-players:         "&cOnly players can run this."
-no-permission:        "&cYou lack permission: %s"
-verdict-clean:        "&aClean"
-verdict-suspicious:   "&cSuspicious"
+only-players: "&cOnly players can run this."
+player-not-found: "&cPlayer %s not found or offline."
+no-permission: "&cYou do not have permission to use this command."
+verdict-clean: "&aClean"
+verdict-suspicious: "&cSuspicious"
 
 
 # AimAnalysisCommand
-usage-aimanalysis:    "&7Usage: &e/aimanalysis <player> [duration]"
-player-not-found:     "&cPlayer not found or offline."
-already-running:      "&cAnalysis already running for %s"
-start-analysis:       "&aStarting aim analysis on %s for %d seconds"
-invalid-duration:     "&eInvalid duration; defaulting to %d seconds"
-not-enough-data:      "&cNot enough data to analyze."
+usage-aimanalysis: "&7Usage: &e/aimanalysis <player> [duration]"
+already-running: "&cAnalysis already running for %s"
+start-analysis: "&aStarting aim analysis on %s for %d seconds"
+invalid-duration: "&eInvalid duration; defaulting to %d seconds"
+not-enough-data: "&cNot enough data to analyze."
 
-results-title:        "&6Aim Analysis Results for %s"
-results-ping:         "&7Avg Ping: %.1f ms"
-results-mean:         "&7Mean Yaw Δ: %.3f° | Mean Pitch Δ: %.3f°"
-results-std:          "&7StdDev Yaw: %.3f° | StdDev Pitch: %.3f°"
+results-title: "&6Aim Analysis Results for %s"
+results-ping: "&7Avg Ping: %.1f ms"
+results-mean: "&7Mean Yaw Δ: %.3f° | Mean Pitch Δ: %.3f°"
+results-std: "&7StdDev Yaw: %.3f° | StdDev Pitch: %.3f°"
 
 
 # CPSCommand
-cps-no-permission:    "&cYou do not have permission."
-cps-usage:            "&7Usage: &e/cpstest <player> [check] [#s|#cps]"
-cps-player-not-found: "&cPlayer %s is not online."
-cps-already-running:  "&cThat player %s is already in a test."
+cps-usage: "&7Usage: &e/cpstest <player> [check] [#s|#cps]"
+cps-already-running: "&cThat player %s is already in a test."
 
-cps-started:          "&aStarted CPS test on &6%s &afor &6%d %s &7[check: %s]"
-cps-feedback-header:  "&8[&6CPS&8] &f%s's Last %d Seconds"
-cps-feedback-line:    "  * &6%d CPS"
+cps-started: "&aStarted CPS test on &6%s &afor &6%d %s &7[check: %s]"
+cps-feedback-header: "&8[&6CPS&8] &f%s's Last %d Seconds"
+cps-feedback-line: "  * &6%d CPS"
 
-cps-finish-title:     "\n&a&lCPS TEST FINISHED &7– &f%s &7[%d clicks]\n"
-cps-finish-stats:     "&7Average: &6%.2f CPS   &7Minimum: &6%d CPS   &7Maximum: &6%d CPS\n"
-cps-finish-verdict:   "&fResult&7: %s (%.1f%% sure)\n"
+cps-finish-title: "\n&a&lCPS TEST FINISHED &7– &f%s &7[%d clicks]\n"
+cps-finish-stats: "&7Average: &6%.2f CPS   &7Minimum: &6%d CPS   &7Maximum: &6%d CPS\n"
+cps-finish-verdict: "&fResult&7: %s (%.1f%% sure)\n"
+
+
+# KillAuraCommand
+killaura-usage: "&7Usage: &e/killauratest <player>"
+killaura-already-running: "&cA KillAura test is already running for &6%s"
+killaura-started: "&aStarted KillAura test on %s."
+
+killaura-test-result-title: "&6KillAura Test Results for %s:"
+killaura-hits-npc: "&7Hits on NPC: %d"
+killaura-gaze-count: "&7Gaze Count: %d"
+killaura-reach-violations: "&7Reach Violations: %d"
+killaura-hits-player: "&7Hits on Player: %d"
+killaura-hits-player-detail: "&7 * %s: %d"
+killaura-score: "&7Score: %d/%d"
+
+
+# NoFallCommand messages
+nofall-usage: "&7Usage: &e/nofalltest [player]"
+nofall-already-running: "&cNo-fall test already in progress for %s"
+nofall-started: "&aLaunched &6%s &ainto the air for a no-fall test."
+nofall-expected-damage: "&7Expected fall damage: &6%.2f"
+nofall-landed: "&a%s has landed. No-fall test ended."
+nofall-invalidated: "&c%s took %s damage (%s) during test. Test invalidated."
+nofall-suspicious: "&cSuspicious: %s took only %.2f damage (expected %.2f)"
+nofall-pass: "&a%s took %.2f fall damage. Test passed."
+nofall-quit: "&cThe test for %s ended inconclusive as the target left the server."                  
+
+
+# VelocityCommand messages
+velocity-usage: "&7Usage: &e/velocitytest <player>"
+velocity-invalid-mode: "&cCannot test %s in their current mode."
+velocity-slow-block: "&cTarget is on a slow block (&6%s&c). Test canceled."
+velocity-started: "&aKnockback applied to &6%s&a. Evaluating…"
+velocity-stats: "&7Δt &e%.2f &7s | TPS &e%.1f"
+velocity-movements: "&7Horiz &e%.2f &7| Vert &e%.2f &7| Threshold &e%.2f"
+velocity-suspicious: "&c%s is suspicious (too little movement)."
+velocity-clean: "&a%s appears clean."
 
 
 # Pagination (generic)
-pagination-header:    "&7--- Page %d of %d ---"
-pagination-item:      "&f%s"
-pagination-prev:      "&c[Previous]"
-pagination-next:      "&a[Next]"
+pagination-header: "&7--- Page %d of %d ---"
+pagination-item: "&f%s"
+pagination-prev: "&c[Previous]"
+pagination-next: "&a[Next]"

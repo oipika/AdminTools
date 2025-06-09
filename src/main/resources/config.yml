@@ -37,12 +37,56 @@ cps:
     w-lqr: 1.0 # (Longest Quiet Ratio) – Effective at spotting double-clicks or irregular bursts (scale 0–30)
 
 
-# Example placeholders for your other checks:
 killauratest:
-  max-attack-angle: 45.0
+  default-duration-ticks: 100 # Test Duration
+  max-npc-hits: 3 # Max NPC Hits
+  max-gaze-count: 50
+  min-gaze-threshold: 3
+  max-reach-violations: 3
+  max-total-score: 50
+  max-reach: 3.05
+  aim-threshold: 15.0
 
-nofalltest:
-  fall-distance-threshold: 3.0
 
-velocitytest:
-  max-movement-delta: 1.0
+nofall:
+  # upward launch velocity (blocks/tick)
+  launch-velocity: 1.2
+  # gravity constant used for fall distance calculation
+  gravity: 0.08
+  # minimum TPS for no adjustment, else multiply expected damage by this factor
+  min-tps: 18
+  tps-adjust-factor: 0.85
+  # threshold factor: actual < expected * invalidation-factor → suspicious
+  invalidation-factor: 0.85
+  # list of blocks that negate fall damage entirely
+  safe-blocks:
+    - HAY_BLOCK
+    - LADDER
+    - VINE
+    - WATER
+    - STATIONARY_WATER
+    - SLIME_BLOCK
+    - WEB
+    - BED_BLOCK
+    - LAVA
+    - STATIONARY_LAVA
+
+
+velocity:
+  base-threshold: 1.20 # Base horizontal movement threshold (blocks)
+  slow-penalty: 0.15 # Each level of slowness reduces threshold by this amount
+  speed-bonus: 0.25   # Each level of speed boost increases threshold by this amount
+  # If TPS falls below this, apply a multiplier per missing tick
+  low-tps-floor: 17.0
+  low-tps-multiplier-per-tps: 0.05
+  # How many ticks before timing out the test
+  timeout-ticks: 100
+  # Blocks that count as 'slow blocks' and cancel the test
+  slow-blocks:
+    - SOUL_SAND
+    - WEB
+    - WATER
+    - LADDER
+    - VINE
+    - ICE
+    - PACKED_ICE

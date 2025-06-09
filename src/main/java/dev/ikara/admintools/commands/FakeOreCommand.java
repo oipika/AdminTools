@@ -56,7 +56,7 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         for (Map.Entry<UUID, OreTestInfo> e : testingPlayers.entrySet()) {
             OreTestInfo info = e.getValue();
             if (info.timeoutTask != null) info.timeoutTask.cancel();
-            if (info.spawnTask   != null) info.spawnTask.cancel();
+            if (info.spawnTask != null) info.spawnTask.cancel();
             Player suspect = Bukkit.getPlayer(e.getKey());
             if (suspect != null) revertFakeBlocks(suspect, info);
         }
@@ -92,9 +92,9 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         }
 
         // parse with defaults
-        Material oreType    = (args.length >= 2 ? parseMaterial(issuer, args[1]) : Material.DIAMOND_ORE);
-        int amount          = (args.length >= 3 ? parseInt(issuer, args[2], 5) : 5);
-        int radius          = (args.length >= 4 ? parseInt(issuer, args[3], 10) : 10);
+        Material oreType = (args.length >= 2 ? parseMaterial(issuer, args[1]) : Material.DIAMOND_ORE);
+        int amount = (args.length >= 3 ? parseInt(issuer, args[2], 5) : 5);
+        int radius = (args.length >= 4 ? parseInt(issuer, args[3], 10) : 10);
         int durationSeconds = (args.length >= 5 ? parseInt(issuer, args[4], 30) : 30);
 
         if (oreType == null || amount < 0 || radius < 0 || durationSeconds < 0) {
@@ -102,12 +102,12 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         }
 
         OreTestInfo info = new OreTestInfo();
-        info.issuer          = issuer;
-        info.oreType         = oreType;
-        info.amount          = amount;
-        info.radius          = radius;
+        info.issuer = issuer;
+        info.oreType = oreType;
+        info.amount = amount;
+        info.radius = radius;
         info.durationSeconds = durationSeconds;
-        info.startTime       = System.currentTimeMillis();
+        info.startTime = System.currentTimeMillis();
         testingPlayers.put(tid, info);
 
         scheduleSpawns(target, info);
@@ -222,10 +222,10 @@ public class FakeOreCommand implements CommandExecutor, Listener {
     public void onMove(PlayerMoveEvent e) {
         OreTestInfo info = testingPlayers.get(e.getPlayer().getUniqueId());
         if (info != null) {
-            double yaw   = e.getTo().getYaw();
+            double yaw = e.getTo().getYaw();
             double pitch = e.getTo().getPitch();
-            info.minYaw   = Math.min(info.minYaw,   yaw);
-            info.maxYaw   = Math.max(info.maxYaw,   yaw);
+            info.minYaw = Math.min(info.minYaw,   yaw);
+            info.maxYaw = Math.max(info.maxYaw,   yaw);
             info.minPitch = Math.min(info.minPitch, pitch);
             info.maxPitch = Math.max(info.maxPitch, pitch);
         }
@@ -250,7 +250,7 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         OreTestInfo info = testingPlayers.remove(pid);
         if (info == null) return;
         if (info.timeoutTask != null) info.timeoutTask.cancel();
-        if (info.spawnTask   != null) info.spawnTask.cancel();
+        if (info.spawnTask != null) info.spawnTask.cancel();
         revertFakeBlocks(e.getPlayer(), info);
     }
 
@@ -258,7 +258,7 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         OreTestInfo info = testingPlayers.remove(pid);
         if (info == null) return;
         if (info.timeoutTask != null) info.timeoutTask.cancel();
-        if (info.spawnTask   != null) info.spawnTask.cancel();
+        if (info.spawnTask != null) info.spawnTask.cancel();
 
         // revert fake blocks to the suspect
         Player suspect = Bukkit.getPlayer(pid);
@@ -266,9 +266,9 @@ public class FakeOreCommand implements CommandExecutor, Listener {
 
         // compute stats
         double timeTaken = (System.currentTimeMillis() - info.startTime) / 1000.0;
-        double dyaw   = info.maxYaw   - info.minYaw;
+        double dyaw = info.maxYaw - info.minYaw;
         double dpitch = info.maxPitch - info.minPitch;
-        String name   = (suspect != null ? suspect.getName() : "Unknown");
+        String name = (suspect != null ? suspect.getName() : "Unknown");
 
         // send only to issuer
         info.issuer.sendMessage(
@@ -289,9 +289,9 @@ public class FakeOreCommand implements CommandExecutor, Listener {
         if (suspect != null) revertFakeBlocks(suspect, info);
 
         double duration = (System.currentTimeMillis() - info.startTime) / 1000.0;
-        double dyaw   = info.maxYaw   - info.minYaw;
+        double dyaw = info.maxYaw - info.minYaw;
         double dpitch = info.maxPitch - info.minPitch;
-        String name   = Bukkit.getOfflinePlayer(pid).getName();
+        String name = Bukkit.getOfflinePlayer(pid).getName();
 
         info.issuer.sendMessage(
             ChatColor.GREEN + name + " → CLEAN (no fake ore mined)\n" +

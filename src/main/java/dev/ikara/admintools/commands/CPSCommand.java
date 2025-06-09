@@ -37,27 +37,27 @@ public class CPSCommand implements CommandExecutor {
         this.plugin = plugin;
 
         // CPSCommand settings
-        this.defaultDuration    = plugin.getConfig().getInt("cps.default-duration", 30);
-        this.feedbackInterval   = plugin.getConfig().getInt("cps.feedback-interval", 5);
+        this.defaultDuration = plugin.getConfig().getInt("cps.default-duration", 30);
+        this.feedbackInterval = plugin.getConfig().getInt("cps.feedback-interval", 5);
 
         // burst settings
-        this.burstDtThreshold   = plugin.getConfig().getLong("cps.burst.dt-threshold-millis", 25);
-        this.burstRatioScale    = plugin.getConfig().getDouble("cps.burst.ratio-scale", 2.0);
+        this.burstDtThreshold = plugin.getConfig().getLong("cps.burst.dt-threshold-millis", 25);
+        this.burstRatioScale = plugin.getConfig().getDouble("cps.burst.ratio-scale", 2.0);
 
         // entropy settings
-        this.entropyMinSamples  = plugin.getConfig().getInt("cps.entropy.min-samples", 5);
+        this.entropyMinSamples = plugin.getConfig().getInt("cps.entropy.min-samples", 5);
 
         // variance settings
         this.varianceMinSamples = plugin.getConfig().getInt("cps.variance.min-samples", 5);
         this.varianceCvMultiplier = plugin.getConfig().getDouble("cps.variance.cv-multiplier", 5.0);
 
         // metrics weights
-        this.wMean     = plugin.getConfig().getDouble("cps.metrics.w-mean", 0.0);
-        this.wStddev   = plugin.getConfig().getDouble("cps.metrics.w-stddev", 2.0);
+        this.wMean = plugin.getConfig().getDouble("cps.metrics.w-mean", 0.0);
+        this.wStddev = plugin.getConfig().getDouble("cps.metrics.w-stddev", 2.0);
         this.wSkewness = plugin.getConfig().getDouble("cps.metrics.w-skewness", 0.5);
         this.wKurtosis = plugin.getConfig().getDouble("cps.metrics.w-kurtosis", 0.5);
-        this.wEntropy  = plugin.getConfig().getDouble("cps.metrics.w-entropy", 2.0);
-        this.wLqr      = plugin.getConfig().getDouble("cps.metrics.w-lqr", 1.0);
+        this.wEntropy = plugin.getConfig().getDouble("cps.metrics.w-entropy", 2.0);
+        this.wLqr = plugin.getConfig().getDouble("cps.metrics.w-lqr", 1.0);
 
         plugin.getCommand("cpstest").setExecutor(this);
     }
@@ -66,7 +66,7 @@ public class CPSCommand implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         // permission
         if (!sender.hasPermission("admintools.cps")) {
-            MessageHandler.sendErrorFmt(sender, "cps-no-permission");
+            MessageHandler.sendErrorFmt(sender, "no-permission");
             return true;
         }
         // usage
@@ -78,7 +78,7 @@ public class CPSCommand implements CommandExecutor {
         // target
         Player target = Bukkit.getPlayer(args[0]);
         if (target == null) {
-            MessageHandler.sendErrorFmt(sender, "cps-player-not-found", args[0]);
+            MessageHandler.sendErrorFmt(sender, "player-not-found", args[0]);
             return true;
         }
 
@@ -238,8 +238,8 @@ public class CPSCommand implements CommandExecutor {
         void finish() {
             // cancel tasks
             if (perSecondTask != null) perSecondTask.cancel();
-            if (feedbackTask   != null) feedbackTask.cancel();
-            if (endTask        != null) endTask.cancel();
+            if (feedbackTask != null) feedbackTask.cancel();
+            if (endTask != null) endTask.cancel();
 
             PacketInterceptor.remove(player, handlerName);
             sessions.remove(player.getUniqueId());
@@ -266,7 +266,7 @@ public class CPSCommand implements CommandExecutor {
             String tpl         = MessageHandler.get(
                 "cps-finish-verdict","&fResult&7: %s (%.1f%% sure)"
             );
-            String formatted   = String.format(tpl, verdictText, pct);
+            String formatted = String.format(tpl, verdictText, pct);
 
             BaseComponent[] comps = TextComponent.fromLegacyText(
                 ChatColor.translateAlternateColorCodes('&', formatted)
@@ -288,8 +288,8 @@ public class CPSCommand implements CommandExecutor {
 
         void terminate() {
             if (perSecondTask != null) perSecondTask.cancel();
-            if (feedbackTask   != null) feedbackTask.cancel();
-            if (endTask        != null) endTask.cancel();
+            if (feedbackTask != null) feedbackTask.cancel();
+            if (endTask != null) endTask.cancel();
             PacketInterceptor.remove(player, handlerName);
         }
     }

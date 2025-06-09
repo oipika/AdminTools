@@ -34,11 +34,11 @@ public class FakeBaseCommand implements CommandExecutor, Listener {
 
     private static class Test {
         Player target, issuer;
-        int    distance, duration;
-        long   startTime;
-        int    gazeCount, gazeStreak;
+        int distance, duration;
+        long startTime;
+        int gazeCount, gazeStreak;
         BukkitRunnable gazeTask, endTask;
-        Set<Location>            watched   = new HashSet<>();
+        Set<Location> watched = new HashSet<>();
         Map<Location, BlockData> originals = new HashMap<>();
     }
 
@@ -119,11 +119,11 @@ public class FakeBaseCommand implements CommandExecutor, Listener {
         }
 
         Test t = new Test();
-        t.issuer     = issuer;
-        t.target     = target;
-        t.distance   = distance;
-        t.duration   = duration;
-        t.startTime  = System.currentTimeMillis();
+        t.issuer = issuer;
+        t.target = target;
+        t.distance = distance;
+        t.duration = duration;
+        t.startTime = System.currentTimeMillis();
         active.put(id, t);
 
         Location p = target.getLocation();
@@ -307,14 +307,14 @@ public class FakeBaseCommand implements CommandExecutor, Listener {
     /** Guilty end (left‑click) */
     private void endTestGuilty(Test t) {
         if (t.gazeTask != null) t.gazeTask.cancel();
-        if (t.endTask  != null) t.endTask.cancel();
+        if (t.endTask != null) t.endTask.cancel();
         t.originals.forEach((loc, bd) ->
             t.target.sendBlockChange(loc, bd.mat, bd.data)
         );
         active.remove(t.target.getUniqueId());
 
         long elapsedMs = System.currentTimeMillis() - t.startTime;
-        int  secs = (int)(elapsedMs / 1000);
+        int secs = (int)(elapsedMs / 1000);
 
         TextComponent verdict = new TextComponent("Fakebase Test: ");
         verdict.setColor(net.md_5.bungee.api.ChatColor.GOLD);
