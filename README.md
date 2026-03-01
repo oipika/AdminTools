@@ -1,7 +1,7 @@
 # Admin Tools
 
 
-Tool that aims to help administrators make a far more educated guess on whether a player is using unfair modifcations
+Tool that aims to help administrators make a far more educated guess on whether a player is using unfair modifcations. This is an old project of mine when I first started experimenting with anticheat related detections and stuff. A lot of the implmentation is bad but I think the concept is still a decent a way to explore to help further assist staff assess whether a player is cheating or not. 
 
 
 ## Commands
